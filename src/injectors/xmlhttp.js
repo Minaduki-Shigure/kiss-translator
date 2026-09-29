@@ -6,6 +6,7 @@
 export const XMLHttpRequestInjector = () => {
   try {
     const originalOpen = XMLHttpRequest.prototype.open;
+    if (originalOpen.__kissTranslatorCaptionHook) return;
     XMLHttpRequest.prototype.open = function (...args) {
       const url = args[1];
       // 匹配 YouTube 的 timedtext 字幕网络请求链接
@@ -28,6 +29,13 @@ export const XMLHttpRequestInjector = () => {
       }
       return originalOpen.apply(this, args);
     };
+    Object.defineProperty(
+      XMLHttpRequest.prototype.open,
+      "__kissTranslatorCaptionHook",
+      {
+        value: true,
+      }
+    );
   } catch (err) {
     console.log("XMLHttpRequestInjector", err);
   }

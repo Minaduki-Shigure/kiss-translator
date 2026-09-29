@@ -1,5 +1,7 @@
 # KISS Translator 简约翻译
 
+> 此 fork 的 `safari/macos-port` 分支维护 macOS Safari Web Extension，提供 Apple Development 证书签名的自用 DMG 构建流程。安装、平台差异与维护方式见 [Safari 说明](docs/SAFARI.md)。上游项目和许可证保留如下。
+
 [English](README.en.md) | [中文](README.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
 一个简约、开源的 [双语对照翻译扩展 & 油猴脚本](https://github.com/fishjar/kiss-translator)。

@@ -1,156 +1,182 @@
-#!/usr/bin/env zx
-import { $, globby } from "zx";
-import path from "node:path";
+#!/usr/bin/env node
 import fs from "node:fs/promises";
-import dotenv from "dotenv";
-import { findUp } from "find-up";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 
-// 打开详细日志，方便调试
-$.verbose = true;
+const root = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../.."
+);
+const config = JSON.parse(
+  await fs.readFile(path.join(root, "safari.config.json"), "utf8")
+);
+const pkg = JSON.parse(
+  await fs.readFile(path.join(root, "package.json"), "utf8")
+);
+if (
+  config.version !== pkg.version ||
+  !Number.isSafeInteger(config.buildNumber) ||
+  config.buildNumber < 1
+) {
+  throw new Error(
+    "Safari version must match package.json and buildNumber must be a positive integer"
+  );
+}
+if (!/^[A-Za-z0-9.-]+$/.test(config.bundleIdentifier)) {
+  throw new Error("Invalid Safari bundle identifier");
+}
+const projectDir = path.join(root, "build", config.appName);
+const extensionName = `${config.appName} Extension`;
+const extensionDir = path.join(root, "build/safari");
 
-async function main() {
-  // 1. 初始化路径与配置
-  const packageJsonPath = await findUp("package.json");
-  if (!packageJsonPath) throw new Error("Could not find package.json");
-
-  const rootPath = path.dirname(packageJsonPath);
-
-  // 加载环境变量
-  dotenv.config({ path: path.join(rootPath, ".env.local") });
-
-  // 从 package.json 读取版本
-  const pkg = JSON.parse(await fs.readFile(packageJsonPath, "utf-8"));
-
-  // 2. 集中配置项
-  const CONFIG = {
-    projectName: "Kiss Translator",
-    identifier: "com.fishjar.kiss-translator",
-    appCategory: "public.app-category.productivity",
-    developmentTeam: process.env.DEVELOPMENT_TEAM, // 如果没有设置，后续逻辑会处理
-    distPath: "build",
-    sourcePath: "build/safari", // Web Extension 产物位置
-    version: pkg.version,
-  };
-
-  // 设置环境变量
-  process.env.NODE_ENV = "production";
-
-  console.log(`🚀 开始构建: ${CONFIG.projectName} v${CONFIG.version}`);
-
-  // 3. 执行构建命令
-  // 确保构建目录存在
-  await $`pnpm build:safari-output`;
-
-  // 转换项目 (注意：--force 会覆盖已存在的项目)
-  await $`xcrun safari-web-extension-converter --bundle-identifier ${CONFIG.identifier} --force --project-location ${CONFIG.distPath} ${CONFIG.sourcePath}`;
-
-  /**
-   * 核心逻辑：修改 Xcode 工程配置 (project.pbxproj)
-   */
-  async function updateProjectConfig() {
-    const projectPbxPath = path.join(
-      rootPath,
-      CONFIG.distPath,
-      CONFIG.projectName,
-      `${CONFIG.projectName}.xcodeproj`,
-      "project.pbxproj"
-    );
-
-    let content = await fs.readFile(projectPbxPath, "utf-8");
-
-    // 预先计算 Project Version (例如: 1.2.3 -> 10203)
-    const projectVersionInt = parseProjectVersion(CONFIG.version);
-
-    // 准备要注入的 Info.plist 键值对
-    const additionalInfoKeys = [
-      `INFOPLIST_KEY_LSApplicationCategoryType = "${CONFIG.appCategory}";`,
-      `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;`,
-    ].join("\n\t\t"); // 使用 Xcode 风格的缩进
-
-    // --- 开始替换 ---
-
-    // 1. 替换 Marketing Version
-    content = content.replace(
-      /MARKETING_VERSION = .*?;/g,
-      `MARKETING_VERSION = ${CONFIG.version};`
-    );
-
-    // 2. 替换 Project Version
-    content = content.replace(
-      /CURRENT_PROJECT_VERSION = \d+;/g,
-      `CURRENT_PROJECT_VERSION = ${projectVersionInt};`
-    );
-
-    // 3. 注入 Development Team (如果有)
-    if (CONFIG.developmentTeam) {
-      // 查找 COPY_PHASE_STRIP，在其后插入 TEAM ID
-      // 使用更宽松的正则来匹配可能的空白字符
-      content = content.replace(
-        /(COPY_PHASE_STRIP = NO;)/g,
-        `$1\n\t\t\t\tDEVELOPMENT_TEAM = ${CONFIG.developmentTeam};`
-      );
-    }
-
-    // 4. 注入 InfoPlist 额外配置
-    // 原逻辑是在 DisplayName 后追加。这里合并操作，只替换一次，避免重复查找。
-    // 匹配: INFOPLIST_KEY_CFBundleDisplayName = "Name";
-    const displayNameRegex = new RegExp(
-      `(INFOPLIST_KEY_CFBundleDisplayName = "${CONFIG.projectName}";)`,
-      "g"
-    );
-    content = content.replace(
-      displayNameRegex,
-      `$1\n\t\t${additionalInfoKeys}`
-    );
-
-    await fs.writeFile(projectPbxPath, content);
-    console.log("✅ Xcode 项目配置已更新");
-  }
-
-  /**
-   * 核心逻辑：修改 Info.plist
-   */
-  async function updateInfoPlist() {
-    const projectDir = path.join(rootPath, CONFIG.distPath, CONFIG.projectName);
-    const files = await globby("**/*.plist", {
-      cwd: projectDir,
-      absolute: true,
+async function run(command, args) {
+  await new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: root,
+      env: {
+        ...process.env,
+        PATH: `${path.join(root, "node_modules/.bin")}${path.delimiter}${process.env.PATH}`,
+      },
+      stdio: "inherit",
     });
+    child.on("error", reject);
+    child.on("exit", (code, signal) =>
+      code === 0
+        ? resolve()
+        : reject(new Error(`${command} failed (${code ?? signal})`))
+    );
+  });
+}
 
-    // 构造要插入的 XML 片段
-    const versionXml = `
-    <key>CFBundleVersion</key>
-    <string>$(CURRENT_PROJECT_VERSION)</string>`;
+if (!process.argv.includes("--skip-web-build")) {
+  await run(path.join(root, "node_modules/.bin/zx"), [
+    "src/scripts/build-task.mjs",
+    "--target=safari",
+  ]);
+}
+const manifest = JSON.parse(
+  await fs.readFile(path.join(extensionDir, "manifest.json"), "utf8")
+);
+if (manifest.version !== config.version)
+  throw new Error("Rebuild the Safari resources: manifest version differs");
 
-    for (const file of files) {
-      let content = await fs.readFile(file, "utf-8");
+await run("xcrun", [
+  "safari-web-extension-converter",
+  extensionDir,
+  "--project-location",
+  path.join(root, "build"),
+  "--app-name",
+  config.appName,
+  "--bundle-identifier",
+  config.bundleIdentifier,
+  "--swift",
+  "--macos-only",
+  "--copy-resources",
+  "--no-open",
+  "--no-prompt",
+  "--force",
+]);
 
-      // 使用正则精准匹配文件末尾的 closing tags，忽略空白符差异
-      // 替换 </dict>\n</plist> 为 新内容 + 闭合标签
-      if (!content.includes("<key>CFBundleVersion</key>")) {
-        content = content.replace(
-          /\s*<\/dict>\s*<\/plist>\s*$/,
-          `${versionXml}\n</dict>\n</plist>`
-        );
-        await fs.writeFile(file, content);
-      }
+const projectPath = path.join(
+  projectDir,
+  `${config.appName}.xcodeproj/project.pbxproj`
+);
+let project = await fs.readFile(projectPath, "utf8");
+let patchedTargets = 0;
+function setting(body, key, value) {
+  const expression = new RegExp(`(^[\\t ]*)${key} = [^;]*;`, "m");
+  return expression.test(body)
+    ? body.replace(
+        expression,
+        (_line, whitespace) => `${whitespace}${key} = ${value};`
+      )
+    : `${body}\n\t\t\t\t${key} = ${value};`;
+}
+project = project.replace(
+  /buildSettings = \{([\s\S]*?)\n\t\t\t\};/g,
+  (_block, original) => {
+    let body = setting(
+      original,
+      "MACOSX_DEPLOYMENT_TARGET",
+      config.minimumMacOSVersion
+    );
+    if (body.includes("PRODUCT_BUNDLE_IDENTIFIER =")) {
+      patchedTargets++;
+      const isExtension =
+        /PRODUCT_BUNDLE_IDENTIFIER = [^;]*\.Extension"?;/.test(body);
+      const values = {
+        PRODUCT_BUNDLE_IDENTIFIER: JSON.stringify(
+          config.bundleIdentifier + (isExtension ? ".Extension" : "")
+        ),
+        MARKETING_VERSION: config.version,
+        CURRENT_PROJECT_VERSION: config.buildNumber,
+        CODE_SIGN_ENTITLEMENTS: JSON.stringify(
+          path.join(
+            root,
+            "scripts/safari",
+            isExtension ? "extension.entitlements" : "host.entitlements"
+          )
+        ),
+        ENABLE_HARDENED_RUNTIME: "YES",
+        ENABLE_APP_SANDBOX: "YES",
+        ENABLE_OUTGOING_NETWORK_CONNECTIONS: "NO",
+        ENABLE_USER_SELECTED_FILES: "NO",
+        REGISTER_APP_GROUPS: "NO",
+        // Xcode can otherwise add get-task-allow to development identities.
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS: "NO",
+        INFOPLIST_KEY_LSApplicationCategoryType: JSON.stringify(
+          "public.app-category.productivity"
+        ),
+      };
+      for (const [key, value] of Object.entries(values))
+        body = setting(body, key, value);
     }
-    console.log(`✅ 已更新 ${files.length} 个 Info.plist 文件`);
+    return `buildSettings = {${body}\n\t\t\t};`;
   }
+);
+if (patchedTargets !== 4)
+  throw new Error(
+    `Unexpected converter template: found ${patchedTargets} target configurations`
+  );
+await fs.writeFile(projectPath, project);
 
-  await updateProjectConfig();
-  await updateInfoPlist();
-
-  console.log("🎉 构建完成！");
+for (const target of [config.appName, extensionName]) {
+  const plist = path.join(projectDir, target, "Info.plist");
+  // These two keys are omitted by some converter versions.
+  for (const [key, value] of [
+    ["CFBundleVersion", "$(CURRENT_PROJECT_VERSION)"],
+    ["CFBundleShortVersionString", "$(MARKETING_VERSION)"],
+  ]) {
+    await run("/usr/bin/plutil", ["-replace", key, "-string", value, plist]);
+  }
 }
 
-function parseProjectVersion(version) {
-  const [major, minor, patch] = version.split(".").map(Number);
-  // 处理 NaN 情况，防止版本号格式错误导致 NaN
-  return (major || 0) * 10000 + (minor || 0) * 100 + (patch || 0);
+// Keep the minimal container UI and native handler maintained as normal sources.
+for (const [source, target] of [
+  ["ViewController.swift", config.appName],
+  ["SafariWebExtensionHandler.swift", extensionName],
+]) {
+  const template = path.join(root, "native/safari", source);
+  await fs.access(template);
+  const content = (await fs.readFile(template, "utf8"))
+    .replaceAll(
+      "__SAFARI_EXTENSION_BUNDLE_IDENTIFIER__",
+      `${config.bundleIdentifier}.Extension`
+    )
+    .replaceAll("__SAFARI_RELEASE_VERSION__", config.releaseVersion);
+  await fs.writeFile(path.join(projectDir, target, source), content);
 }
 
-main().catch((err) => {
-  console.error("❌ 构建失败:", err);
-  process.exit(1);
-});
+await fs.copyFile(
+  path.join(root, "native/safari/Main.storyboard"),
+  path.join(projectDir, config.appName, "Base.lproj/Main.storyboard")
+);
+
+console.log(`Safari project ready: ${projectDir}`);
+console.log(
+  `Version ${config.version} (${config.buildNumber}); release ${config.releaseVersion}`
+);
+console.log(
+  "This command generates the project. Use package:safari:development to build and sign the DMG."
+);

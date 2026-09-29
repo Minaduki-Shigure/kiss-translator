@@ -1,6 +1,6 @@
 import { YouTubeInitializer } from "./YouTubeCaptionProvider.js";
 import { isMatch } from "../libs/utils.js";
-import { DEFAULT_API_SETTING } from "../config/api.js";
+import { DEFAULT_API_SETTING, isApiTypeSupported } from "../config/api.js";
 import { DEFAULT_SUBTITLE_SETTING } from "../config/setting.js";
 import { STOKEY_SETTING } from "../config/storage.js";
 import { logger } from "../libs/log.js";
@@ -59,8 +59,18 @@ export function runSubtitle({ href, setting }) {
 
       // 2. 获取当前字幕翻译所关联的翻译 API 配置 (apiSetting)
       const transApis = setting.transApis || [];
-      const enabledTransApis = transApis.filter((api) => !api.isDisabled);
+      const selectedApi = transApis.find(
+        (api) => api.apiSlug === subtitleSetting.apiSlug
+      );
+      const enabledTransApis = transApis.filter(
+        (api) => !api.isDisabled && isApiTypeSupported(api.apiType)
+      );
       const apiSetting =
+        // Keep an explicitly selected local-only provider. The translation
+        // entry point reports its platform error instead of sending text away.
+        (selectedApi && !isApiTypeSupported(selectedApi.apiType)
+          ? selectedApi
+          : undefined) ||
         enabledTransApis.find(
           (api) => api.apiSlug === subtitleSetting.apiSlug
         ) ||

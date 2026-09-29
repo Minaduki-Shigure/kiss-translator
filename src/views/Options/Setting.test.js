@@ -42,10 +42,14 @@ jest.mock("../../hooks/Alert", () => ({
 
 jest.mock("../../hooks/Setting", () => ({ useSetting: jest.fn() }));
 let mockIsExt = true;
+let mockIsSafari = false;
 jest.mock("../../libs/client", () => ({
   isAutoTranslateClipboardSupported: true,
   get isExt() {
     return mockIsExt;
+  },
+  get isSafari() {
+    return mockIsSafari;
   },
 }));
 jest.mock("../../libs/clipboard", () => ({
@@ -221,6 +225,7 @@ describe("Settings backup import", () => {
 describe("ExtCommands", () => {
   beforeEach(() => {
     browser.commands.getAll.mockResolvedValue(commands);
+    mockIsSafari = false;
     browser.tabs.create.mockReset();
     alert.info.mockReset();
     useAlert.mockReturnValue(alert);
@@ -228,6 +233,22 @@ describe("ExtCommands", () => {
 
   afterEach(() => {
     setUserAgent(originalUserAgent);
+    mockIsSafari = false;
+  });
+
+  test("shows Safari shortcut-management instructions without opening Chromium settings", async () => {
+    mockIsSafari = true;
+    setUserAgent("Mozilla/5.0 Version/26.0 Safari/605.1.15");
+    const { container, root } = await renderCommands();
+    const open = jest.spyOn(window, "open");
+
+    await act(async () => container.querySelector("button").click());
+
+    expect(alert.info).toHaveBeenCalledWith("safari_shortcut_edit_hint");
+    expect(browser.tabs.create).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+    act(() => root.unmount());
   });
 
   test("shows Firefox shortcut-management instructions without opening a tab", async () => {

@@ -101,8 +101,68 @@ describe("persistSubtitlePosition", () => {
 });
 
 describe("runSubtitle", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
+
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
+  });
+
+  test.each([false, true])(
+    "preserves an explicitly selected local-only API in Safari even when disabled=%s",
+    (isDisabled) => {
+      process.env.REACT_APP_CLIENT = "safari";
+      const builtin = {
+        apiSlug: "saved-local",
+        apiType: "BuiltinAI",
+        isDisabled,
+      };
+      const paid = {
+        apiSlug: "paid-cloud",
+        apiType: "OpenAI",
+        isDisabled: false,
+      };
+      const setting = {
+        subtitleSetting: { enabled: true, apiSlug: builtin.apiSlug },
+        transApis: [paid, builtin],
+      };
+
+      runSubtitle({ href: "https://www.youtube.com/watch?v=video-1", setting });
+
+      expect(YouTubeInitializer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiSlug: builtin.apiSlug,
+          apiSetting: builtin,
+        })
+      );
+      expect(setting.subtitleSetting.apiSlug).toBe(builtin.apiSlug);
+      expect(saveEdit).not.toHaveBeenCalled();
+    }
+  );
+
+  test("excludes unavailable local AI from Safari's unconfigured subtitle defaults", () => {
+    process.env.REACT_APP_CLIENT = "safari";
+    const builtin = { apiSlug: "saved-local", apiType: "BuiltinAI" };
+    const available = { apiSlug: "google", apiType: "Google" };
+
+    runSubtitle({
+      href: "https://www.youtube.com/watch?v=video-1",
+      setting: {
+        subtitleSetting: { enabled: true },
+        transApis: [builtin, available],
+      },
+    });
+
+    expect(YouTubeInitializer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiSlug: available.apiSlug,
+        apiSetting: available,
+      })
+    );
   });
 
   test("keeps the runtime API slug aligned with the first enabled service", () => {

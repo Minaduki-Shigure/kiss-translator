@@ -46,6 +46,37 @@ function renderMenus({
 }
 
 describe("subtitle Menus", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
+
+  afterEach(() => {
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
+  });
+
+  test.each(["safari", "chrome"])(
+    "offers platform-supported subtitle providers in %s without changing the saved selection",
+    (client) => {
+      process.env.REACT_APP_CLIENT = client;
+      const view = renderMenus({
+        apiSlug: "saved-local",
+        transApis: [
+          { apiSlug: "saved-local", apiName: "Local AI", apiType: "BuiltinAI" },
+          { apiSlug: "cloud", apiName: "Cloud API", apiType: "OpenAI" },
+        ],
+      });
+      try {
+        const serviceMenu = view.container.firstElementChild.children[1];
+        act(() => serviceMenu.firstElementChild.click());
+        expect(view.container.textContent.includes("Local AI")).toBe(
+          client !== "safari"
+        );
+        expect(view.container.textContent).toContain("Cloud API");
+        expect(view.updateSetting).not.toHaveBeenCalled();
+      } finally {
+        view.cleanup();
+      }
+    }
+  );
   test("keeps immediate translation enabled by default", () => {
     expect(DEFAULT_SUBTITLE_SETTING.autoTranslate).toBe(true);
   });

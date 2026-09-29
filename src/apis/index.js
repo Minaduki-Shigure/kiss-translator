@@ -23,6 +23,7 @@ import {
   OPT_TRANS_TENCENT,
   defaultNobatchUserPrompt,
   defaultDictUserPrompt,
+  isApiTypeSupported,
 } from "../config";
 import { getSetting } from "../libs/storage";
 import { kissLog } from "../libs/log";
@@ -53,6 +54,16 @@ import { getDocInfo } from "../libs/docInfo";
 const PROMPT_CACHE_SALT = "prompt-cache";
 const PROMPT_CACHE_SCOPE_BATCH = "batch";
 const PROMPT_CACHE_SCOPE_NOBATCH = "nobatch";
+
+// A saved local-only provider must never silently become a remote request when
+// settings are shared with Safari. Check before cache lookup or dispatch.
+function requireSupportedApi(apiSetting) {
+  if (!isApiTypeSupported(apiSetting?.apiType)) {
+    throw new Error(
+      "BuiltinAI is unavailable in Safari. Choose another translation service."
+    );
+  }
+}
 const PROMPT_CACHE_SCOPE_DICT = "dict";
 const PROMPT_CACHE_SCOPE_PLAIN = "plain";
 const PROMPT_CACHE_SCOPE_QWEN_MT = "qwen-mt";
@@ -726,6 +737,7 @@ export const apiTranslate = async ({
   }
 
   const { apiType, apiSlug, useBatchFetch } = apiSetting;
+  requireSupportedApi(apiSetting);
   const langMap = OPT_LANGS_TO_SPEC[apiType] || OPT_LANGS_SPEC_DEFAULT;
   const fromMap = OPT_LANGS_FROM_SPEC[apiType] || langMap;
   const from = fromMap.get(fromLang);
@@ -1035,6 +1047,7 @@ export const apiSubtitle = async ({
   signal,
 }) => {
   if (!events?.length) return [];
+  requireSupportedApi(apiSetting);
   const formattedEvents = formatIndexSubtitleEvents(
     events,
     apiSetting.subtitlePrompt
@@ -1118,6 +1131,7 @@ export const apiSummarizeContext = async ({
   transcript,
   apiSetting,
 }) => {
+  requireSupportedApi(apiSetting);
   const cacheOpts = { apiSlug: apiSetting.apiSlug, videoId };
   const cacheInput = `${URL_CACHE_CONTEXT}?${queryString.stringify(cacheOpts)}`;
 

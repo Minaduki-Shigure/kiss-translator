@@ -4,6 +4,7 @@ import {
   DEFAULT_API_LIST,
   OPT_TRANS_MICROSOFT,
   OPT_TRANS_OPENAI,
+  OPT_TRANS_BUILTINAI,
 } from "../config";
 import {
   API_SORT_MODES,
@@ -178,6 +179,63 @@ function renderApiHook(useHook, ...hookArgs) {
 function renderApiList() {
   return renderApiHook(useApiList);
 }
+
+describe("Safari API capabilities", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
+
+  beforeEach(() => {
+    process.env.REACT_APP_CLIENT = "safari";
+    mockUpdateSetting.mockReset();
+  });
+
+  afterEach(() => {
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
+  });
+
+  test.each(["safari", "chrome", "firefox"])(
+    "preserves imported BuiltinAI settings but only offers it on supported %s builds",
+    (client) => {
+      process.env.REACT_APP_CLIENT = client;
+      const builtin = createApi("saved-local-ai", "Local AI", 0, {
+        apiType: OPT_TRANS_BUILTINAI,
+        isDisabled: false,
+      });
+      const openai = createApi("saved-cloud-api", "Cloud API", 1);
+      mockSetting = { transApis: [builtin, openai] };
+      const host = renderApiList();
+
+      expect(host.hookResult.transApis.map((api) => api.apiSlug)).toEqual([
+        builtin.apiSlug,
+        openai.apiSlug,
+      ]);
+      expect(host.hookResult.enabledApis.map((api) => api.apiSlug)).toEqual(
+        client === "safari"
+          ? [openai.apiSlug]
+          : [builtin.apiSlug, openai.apiSlug]
+      );
+      expect(mockSetting.transApis[0].isDisabled).toBe(false);
+      expect(mockUpdateSetting).not.toHaveBeenCalled();
+      host.unmount();
+    }
+  );
+
+  test("does not add or bulk-enable an unsupported local AI service", () => {
+    const builtin = createApi("saved-local-ai", "Local AI", 999, {
+      apiType: OPT_TRANS_BUILTINAI,
+      isDisabled: true,
+    });
+    mockSetting = { transApis: [builtin] };
+    const host = renderApiList();
+
+    expect(host.hookResult.addApi(OPT_TRANS_BUILTINAI)).toBeUndefined();
+    expect(mockUpdateSetting).not.toHaveBeenCalled();
+    act(() => host.hookResult.enableApis([builtin.apiSlug]));
+    const update = mockUpdateSetting.mock.calls[0][0];
+    expect(update(mockSetting).transApis).toEqual([builtin]);
+    host.unmount();
+  });
+});
 
 describe("useApiList", () => {
   const originalCrypto = Object.getOwnPropertyDescriptor(globalThis, "crypto");

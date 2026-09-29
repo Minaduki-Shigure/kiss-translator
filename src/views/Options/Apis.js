@@ -92,6 +92,7 @@ import {
   getDictionaryPromptOptions,
   getPromptDisplayName,
   getSubtitlePromptOptions,
+  isApiTypeSupported,
 } from "../../config";
 import ValidationInput from "../../hooks/ValidationInput";
 import { usePromptList } from "../../hooks/Prompt";
@@ -207,6 +208,7 @@ function TestButton({ api }) {
       variant="outlined"
       onClick={handleApiTest}
       loading={loading}
+      disabled={!isApiTypeSupported(api.apiType)}
     >
       {i18n("click_test")}
     </LoadingButton>
@@ -812,8 +814,9 @@ function ApiFields({ apiSlug, deleteApi, copyApi, onCollapse, onDirtyChange }) {
               <Switch
                 size="small"
                 name="isDisabled"
-                checked={isDisabled}
+                checked={isDisabled || !isApiTypeSupported(apiType)}
                 onChange={handleChange}
+                disabled={!isApiTypeSupported(apiType)}
               />
             }
             label={i18n("is_disabled")}
@@ -830,13 +833,16 @@ function ApiFields({ apiSlug, deleteApi, copyApi, onCollapse, onDirtyChange }) {
                     sortOrder: event.target.checked ? -1 : 0,
                   }));
                 }}
-                disabled={isDisabled}
+                disabled={isDisabled || !isApiTypeSupported(apiType)}
               />
             }
             label={i18n("is_pinned")}
           />
         </Stack>
       </Stack>
+      {!isApiTypeSupported(apiType) && (
+        <Alert severity="info">{i18n("safari_builtin_ai_hint")}</Alert>
+      )}
       <Box>
         <TextField
           size="small"
@@ -1758,14 +1764,15 @@ function ApiListItem({
           apiType={api.apiType}
           size={38}
           imageSize={22}
-          disabled={api.isDisabled}
+          disabled={api.isDisabled || !isApiTypeSupported(api.apiType)}
           lightSurface
         />
         <Box
           sx={{
             minWidth: 0,
             flex: 1,
-            opacity: api.isDisabled ? 0.5 : 1,
+            opacity:
+              api.isDisabled || !isApiTypeSupported(api.apiType) ? 0.5 : 1,
           }}
         >
           <Typography
@@ -2273,6 +2280,7 @@ export default function Apis() {
             {apiTypes.map((apiOption) => (
               <MenuItem
                 key={apiOption.type}
+                disabled={!isApiTypeSupported(apiOption.type)}
                 onClick={() => handleMenuItemClick(apiOption.type)}
                 sx={{ gap: 1 }}
               >

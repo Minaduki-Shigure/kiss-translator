@@ -4,6 +4,7 @@
   "version": "2.1.0",
   "author": "Gabe<yugang2002@gmail.com>",
   "private": true,
+  "packageManager": "pnpm@9.14.4",
   "dependencies": {
     "@emotion/cache": "^11.11.0",
     "@emotion/css": "^11.13.5",
@@ -40,6 +41,8 @@
     "build:firefox": "zx src/scripts/build-task.mjs --target=firefox",
     "build:web": "zx src/scripts/build-task.mjs --target=web",
     "build:safari": "node src/scripts/build-safari.mjs",
+    "package:safari:development": "bash scripts/safari/package-development.sh",
+    "test:safari:native": "bash scripts/test-safari-native.sh",
     "build:userscript-ios": "zx src/scripts/build-ios.mjs",
     "build:rules": "babel-node src/rules.js",
     "format": "prettier --write \"**/*.{js,json,html}\"",

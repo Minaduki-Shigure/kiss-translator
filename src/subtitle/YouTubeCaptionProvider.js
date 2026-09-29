@@ -2,7 +2,11 @@ import { logger } from "../libs/log.js";
 import { apiSubtitle, apiSummarizeContext } from "../apis/index.js";
 import { BilingualSubtitleManager } from "./BilingualSubtitleManager.js";
 import { YouTubeSubtitleList } from "./YouTubeSubtitleList.js";
-import { MSG_XHR_DATA_YOUTUBE, API_SPE_TYPES } from "../config";
+import {
+  MSG_XHR_DATA_YOUTUBE,
+  API_SPE_TYPES,
+  isApiTypeSupported,
+} from "../config";
 import { downloadBlobFile } from "../libs/utils.js";
 import { newI18n } from "../config";
 import { buildBilingualVtt } from "./vtt.js";
@@ -328,7 +332,10 @@ export class YouTubeCaptionProvider {
 
     if (name === "apiSlug") {
       const apiSetting = this.#setting.transApis?.find(
-        (api) => api.apiSlug === value && !api.isDisabled
+        (api) =>
+          api.apiSlug === value &&
+          !api.isDisabled &&
+          isApiTypeSupported(api.apiType)
       );
       if (!apiSetting) return;
 

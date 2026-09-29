@@ -1,8 +1,13 @@
 import { browser } from "../libs/browser";
-import { isExt } from "../libs/client";
+import { isExt, isSafari } from "../libs/client";
 import { injectExternalJs, injectInlineJs } from "../libs/injector";
 import { shadowRootInjector } from "./shadowroot";
 import { XMLHttpRequestInjector } from "./xmlhttp";
+import { MSG_INJECT_PACKAGED_SCRIPT } from "../config/msg";
+import { sendBgMsg } from "../libs/msg";
+import { kissLog } from "../libs/log";
+
+const pendingSafariInjectors = new Map();
 
 // 注入脚本名称映射常数
 export const INJECTOR = {
@@ -26,6 +31,23 @@ const injectorMap = {
 export function injectJs(name, id = "kiss-translator-inject-js") {
   const injector = injectorMap[name];
   if (!injector) return;
+
+  if (isSafari) {
+    // Extension MAIN-world injection is not blocked by a page's script-src CSP.
+    // Keep the old resource/inline paths for the other supported clients.
+    if (pendingSafariInjectors.has(name)) {
+      return pendingSafariInjectors.get(name);
+    }
+    const pending = sendBgMsg(MSG_INJECT_PACKAGED_SCRIPT, { name }).catch(
+      (error) => {
+        pendingSafariInjectors.delete(name);
+        kissLog("inject packaged Safari script", error);
+        return false;
+      }
+    );
+    pendingSafariInjectors.set(name, pending);
+    return pending;
+  }
 
   if (isExt) {
     // 扩展环境：获取打包后的脚本 URL 载入

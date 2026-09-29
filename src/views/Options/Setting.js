@@ -9,7 +9,11 @@ import Link from "@mui/material/Link";
 import { useSetting } from "../../hooks/Setting";
 import { useI18n } from "../../hooks/I18n";
 import { useAlert } from "../../hooks/Alert";
-import { isAutoTranslateClipboardSupported, isExt } from "../../libs/client";
+import {
+  isAutoTranslateClipboardSupported,
+  isExt,
+  isSafari,
+} from "../../libs/client";
 import { browser } from "../../libs/browser";
 import {
   CLIPBOARD_READ_PERMISSION,
@@ -39,6 +43,7 @@ import {
   DEFAULT_HTTP_TIMEOUT,
   getSettingVersion,
   OPT_LANGS_TO_REVERSED as OPT_LANGS_TO,
+  isApiTypeSupported,
 } from "../../config";
 import { useShortcut } from "../../hooks/Shortcut";
 import ShortcutInput from "./ShortcutInput";
@@ -87,6 +92,10 @@ export function ExtCommands() {
   if (!commands || commands.length === 0) return null;
 
   const handleEdit = () => {
+    if (isSafari) {
+      alert.info(i18n("safari_shortcut_edit_hint"));
+      return;
+    }
     let url = "chrome://extensions/shortcuts";
     const ua = navigator.userAgent;
     if (ua.includes("Firefox/")) {
@@ -522,10 +531,17 @@ export default function Settings() {
                 value={langDetector}
                 label={i18n("detected_lang")}
                 onChange={handleChange}
+                helperText={
+                  isSafari ? i18n("safari_lang_detect_hint") : undefined
+                }
               >
                 <MenuItem value={"-"}>{i18n("disable")}</MenuItem>
                 {OPT_LANGDETECTOR_ALL.map((item) => (
-                  <MenuItem value={item} key={item}>
+                  <MenuItem
+                    value={item}
+                    key={item}
+                    disabled={!isApiTypeSupported(item)}
+                  >
                     {item}
                   </MenuItem>
                 ))}

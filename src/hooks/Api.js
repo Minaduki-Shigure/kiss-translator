@@ -4,6 +4,7 @@ import {
   API_SPE_TYPES,
   normalizeApiModelListUrls,
   normalizeApiThinkingSettings,
+  isApiTypeSupported,
 } from "../config";
 import { useSetting } from "./Setting";
 
@@ -181,7 +182,10 @@ export function useApiList() {
 
   // 获取所有启用的 API 列表
   const enabledApis = useMemo(
-    () => transApis.filter((api) => !api.isDisabled),
+    () =>
+      transApis.filter(
+        (api) => !api.isDisabled && isApiTypeSupported(api.apiType)
+      ),
     [transApis]
   );
 
@@ -194,6 +198,7 @@ export function useApiList() {
   // 添加一个新的自定义 API
   const addApi = useCallback(
     (apiType) => {
+      if (!isApiTypeSupported(apiType)) return;
       // 找到内置的该 API 类型的默认配置模版
       const defaultApiOpt =
         DEFAULT_API_LIST.find((da) => da.apiType === apiType) || {};
@@ -328,7 +333,11 @@ export function useApiList() {
         const apiSlugSet = new Set(apiSlugs);
         const nextApis = getDisplayOrderedApis(prev?.transApis || []).map(
           (api) => {
-            if (!apiSlugSet.has(api.apiSlug) || !api.isDisabled) {
+            if (
+              !apiSlugSet.has(api.apiSlug) ||
+              !api.isDisabled ||
+              !isApiTypeSupported(api.apiType)
+            ) {
               return api;
             }
 

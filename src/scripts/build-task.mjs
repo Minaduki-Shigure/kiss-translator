@@ -75,8 +75,22 @@ try {
     await fs.remove(inDest("manifest.thunderbird.json"));
 
     if (target === "safari") {
+      // GitHub Pages marker is not an extension resource; Xcode omits dotfiles.
+      await fs.remove(inDest(".nojekyll"));
       const manifestPath = inDest("manifest.json");
       const manifest = await fs.readJson(manifestPath);
+      // Safari uses Web Speech for reading aloud and keeps larger rule/word
+      // collections in storage.local. It does not implement chrome.tts.
+      manifest.permissions = manifest.permissions.filter(
+        (permission) => permission !== "tts"
+      );
+      if (!manifest.permissions.includes("unlimitedStorage")) {
+        manifest.permissions.push("unlimitedStorage");
+      }
+      manifest.homepage_url =
+        "https://github.com/Minaduki-Shigure/kiss-translator";
+      // Safari chooses how to present the options page; open_in_tab is ignored.
+      delete manifest.options_ui.open_in_tab;
       manifest.optional_permissions = (
         manifest.optional_permissions || []
       ).filter((permission) => permission !== "clipboardRead");
@@ -137,7 +151,9 @@ try {
 
     const { version } = await fs.readJson("package.json");
     await fs.writeFile(inDest("version.txt"), version);
-    console.log(chalk.green(`Version file generated: ${inDest("version.txt")}`));
+    console.log(
+      chalk.green(`Version file generated: ${inDest("version.txt")}`)
+    );
   }
 
   console.log(

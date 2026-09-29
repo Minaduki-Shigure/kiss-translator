@@ -5,6 +5,7 @@ import Tab from "@mui/material/Tab";
 import MenuItem from "@mui/material/MenuItem";
 import Grid from "@mui/material/Grid";
 import Box from "@mui/material/Box";
+import Alert from "@mui/material/Alert";
 import IconButton from "@mui/material/IconButton";
 import DoneIcon from "@mui/icons-material/Done";
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
@@ -24,6 +25,7 @@ import {
   PROMPT_CATEGORY_DICTIONARY,
   PROMPT_MODE_FOLLOW_API,
   findPromptBySlug,
+  isApiTypeSupported,
 } from "../../config";
 import {
   useId,
@@ -146,8 +148,26 @@ export default function TranForm({
   const [editText, setEditText] = useState(text);
   const editTextRef = useRef(editText);
   const [requestRevision, setRequestRevision] = useState(0);
-  const [apiSlugs, setApiSlugs] = useState(initApiSlugs);
-  const [hasUserChangedApiSlugs, setHasUserChangedApiSlugs] = useState(false);
+  // Read saved choices once. Null marks restoration as complete, so later
+  // renders cannot reread storage and overwrite an explicit user selection.
+  const pendingApiSlugsRestoreRef = useRef(undefined);
+  if (apiSlugsStorageKey && pendingApiSlugsRestoreRef.current === undefined) {
+    pendingApiSlugsRestoreRef.current = readStoredApiChoice(apiSlugsStorageKey);
+  }
+  const hasUnavailableSavedChoice =
+    pendingApiSlugsRestoreRef.current?.slugs?.some((slug) =>
+      transApis.some(
+        (api) => api.apiSlug === slug && !isApiTypeSupported(api.apiType)
+      )
+    );
+  const [apiSlugs, setApiSlugs] = useState(() =>
+    hasUnavailableSavedChoice
+      ? pendingApiSlugsRestoreRef.current.slugs
+      : initApiSlugs
+  );
+  const [hasUserChangedApiSlugs, setHasUserChangedApiSlugs] = useState(
+    Boolean(hasUnavailableSavedChoice)
+  );
   const [fromLang, setFromLang] = useState(initFromLang);
   const [toLang, setToLang] = useState(initToLang);
   const [toLang2, setToLang2] = useState(initToLang2);
@@ -164,15 +184,6 @@ export default function TranForm({
     loading: false,
   });
   const inputRef = useRef(null);
-  // 待恢复的本地持久化接口选择（对应当前 storageKey 渲染期只读一次）。
-  // 哨兵语义：undefined = 未初始化（渲染期读取一次的唯一时机）；null = 已处理。
-  // 处理终态置 null 而非 undefined，避免渲染期读取条件被终态重新武装——否则
-  // 每个处理周期确定性重读 localStorage，且后续 effect 会携带陈旧快照再次执行
-  // 恢复分支，回退用户在窗口期内做出的选择。
-  const pendingApiSlugsRestoreRef = useRef(undefined);
-  if (apiSlugsStorageKey && pendingApiSlugsRestoreRef.current === undefined) {
-    pendingApiSlugsRestoreRef.current = readStoredApiChoice(apiSlugsStorageKey);
-  }
   const formRef = useRef(null);
   const focusedTextControlRef = useRef(null);
   const previousSimpleStyleRef = useRef(simpleStyle);
@@ -341,7 +352,7 @@ export default function TranForm({
   const optApis = useMemo(
     () =>
       transApis
-        .filter((api) => !api.isDisabled)
+        .filter((api) => !api.isDisabled && isApiTypeSupported(api.apiType))
         .map((api) => ({
           key: api.apiSlug,
           name: api.apiName || api.apiSlug,
@@ -353,9 +364,19 @@ export default function TranForm({
   const xs = useMemo(() => (isPlaygound ? 6 : 4), [isPlaygound]);
   const md = useMemo(() => (isPlaygound ? 3 : 4), [isPlaygound]);
 
+  // Apply an unavailable saved local-only selection before child effects can
+  // start the default remote provider during the first render.
+  const effectiveApiSlugs = hasUnavailableSavedChoice
+    ? pendingApiSlugsRestoreRef.current.slugs
+    : apiSlugs;
   const activeApiSlugs = useMemo(
-    () => resolveActiveApiSlugs(apiSlugs, optApis),
-    [apiSlugs, optApis]
+    () => resolveActiveApiSlugs(effectiveApiSlugs, optApis),
+    [effectiveApiSlugs, optApis]
+  );
+  const unavailableApiSelected = transApis.some(
+    (api) =>
+      effectiveApiSlugs?.includes(api.apiSlug) &&
+      !isApiTypeSupported(api.apiType)
   );
 
   // 本地持久化接口选择恢复（apiSlugsStorageKey 可选）。
@@ -373,15 +394,21 @@ export default function TranForm({
 
     const validSlugs = new Set(optApis.map((api) => api.key));
     const filtered = pending.slugs.filter((slug) => validSlugs.has(slug));
+    const unavailable = pending.slugs.filter((slug) =>
+      transApis.some(
+        (api) => api.apiSlug === slug && !isApiTypeSupported(api.apiType)
+      )
+    );
 
     if (pending.isEmpty) {
       // 有效存储 [] = 用户显式未选择接口：保持空选择，不被默认值覆盖
       setHasUserChangedApiSlugs(true);
       setApiSlugs([]);
-    } else if (filtered.length > 0) {
+    } else if (filtered.length > 0 || unavailable.length > 0) {
       // 恢复仍在启用的有效接口
       setHasUserChangedApiSlugs(true);
-      setApiSlugs(filtered);
+      // Preserve a saved local-only choice without falling back to a remote API.
+      setApiSlugs([...filtered, ...unavailable]);
     }
     // 过滤后无有效 slug 且非显式空选择 → 无可恢复值，走既有默认逻辑
     // (optional chaining safe; deps: optApis only)
@@ -402,6 +429,7 @@ export default function TranForm({
       (api) =>
         api.apiSlug === aiDictApiSlug &&
         !api.isDisabled &&
+        isApiTypeSupported(api.apiType) &&
         API_SPE_TYPES.ai.has(api.apiType)
     );
     if (!apiSetting) {
@@ -555,6 +583,9 @@ export default function TranForm({
         }
       }}
     >
+      {unavailableApiSelected && (
+        <Alert severity="info">{i18n("safari_builtin_ai_hint")}</Alert>
+      )}
       {/* Keep actions mounted so collapsing the form preserves keyboard focus. */}
       {(!simpleStyle || configActions) && (
         <Box
@@ -764,7 +795,11 @@ export default function TranForm({
                       >
                         <MenuItem value={"-"}>{i18n("disable")}</MenuItem>
                         {OPT_LANGDETECTOR_ALL.map((item) => (
-                          <MenuItem value={item} key={item}>
+                          <MenuItem
+                            value={item}
+                            key={item}
+                            disabled={!isApiTypeSupported(item)}
+                          >
                             {item}
                           </MenuItem>
                         ))}

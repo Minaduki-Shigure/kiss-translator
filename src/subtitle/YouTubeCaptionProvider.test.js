@@ -11,6 +11,7 @@ const mockManagerSettings = [];
 const mockManagers = [];
 
 jest.mock("../config", () => ({
+  isApiTypeSupported: jest.requireActual("../config/api").isApiTypeSupported,
   MSG_XHR_DATA_YOUTUBE: "xhr-youtube",
   API_SPE_TYPES: { ai: new Set(["openai"]) },
   OPT_ENHANCE_ON: "on",

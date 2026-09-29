@@ -6,6 +6,7 @@
 export const shadowRootInjector = () => {
   try {
     const orig = Element.prototype.attachShadow;
+    if (orig.__kissTranslatorShadowHook) return;
     Element.prototype.attachShadow = function (...args) {
       // 执行原生的 attachShadow 逻辑
       const root = orig.apply(this, args);
@@ -17,6 +18,13 @@ export const shadowRootInjector = () => {
       window.postMessage({ type: "KISS_SHADOW_ROOT_CREATED" }, "*");
       return root;
     };
+    Object.defineProperty(
+      Element.prototype.attachShadow,
+      "__kissTranslatorShadowHook",
+      {
+        value: true,
+      }
+    );
   } catch (err) {
     console.log("shadowRootInjector", err);
   }

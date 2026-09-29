@@ -36,6 +36,7 @@ import {
   MSG_TOUCH_TRANSLATE_STATE,
   OPT_LANGS_FROM_REVERSED as OPT_LANGS_FROM,
   OPT_LANGS_TO_REVERSED as OPT_LANGS_TO,
+  isApiTypeSupported,
 } from "../../config";
 import { saveRule } from "../../libs/rules";
 import { tryClearCaches } from "../../libs/cache";
@@ -505,7 +506,7 @@ export default function PopupCont({
   const services = useMemo(
     () =>
       (setting?.transApis || [])
-        .filter((api) => !api.isDisabled)
+        .filter((api) => !api.isDisabled && isApiTypeSupported(api.apiType))
         .sort((left, right) => (left.sortOrder || 0) - (right.sortOrder || 0))
         .map((api) => ({
           key: api.apiSlug,
@@ -580,6 +581,9 @@ export default function PopupCont({
 
   return (
     <section className="kt-popup-content">
+      {setting?.transApis?.some(
+        (api) => api.apiSlug === apiSlug && !isApiTypeSupported(api.apiType)
+      ) && <Alert severity="info">{i18n("safari_builtin_ai_hint")}</Alert>}
       <div
         className={`kt-popup-hero ${
           translationEnabled ? "" : "kt-popup-hero--off"

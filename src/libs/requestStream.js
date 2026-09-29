@@ -271,6 +271,7 @@ export async function* fetchStreamNative(input, init = {}, opts = {}) {
 async function* fetchStreamViaPort(input, init, opts) {
   const asyncQueue = createAsyncQueue();
   const { signal, ...serializableOpts } = opts || {};
+  let settled = false;
 
   let port;
   try {
@@ -287,14 +288,17 @@ async function* fetchStreamViaPort(input, init, opts) {
   };
 
   port.onMessage.addListener((message) => {
+    if (settled) return;
     switch (message.type) {
       case "delta":
         asyncQueue.push(message.data);
         break;
       case "done":
+        settled = true;
         asyncQueue.finish();
         break;
       case "error":
+        settled = true;
         asyncQueue.error(new Error(message.error));
         break;
       default:
@@ -304,12 +308,20 @@ async function* fetchStreamViaPort(input, init, opts) {
 
   port.onDisconnect.addListener(() => {
     const lastError = browser.runtime.lastError;
-    if (lastError) {
-      asyncQueue.error(new Error(lastError.message || "Port disconnected"));
+    if (!settled) {
+      settled = true;
+      asyncQueue.error(
+        new Error(
+          lastError?.message ||
+            "Translation connection closed before completion. Please retry."
+        )
+      );
     }
   });
 
   const abortBySignal = () => {
+    if (settled) return;
+    settled = true;
     asyncQueue.error(
       new DOMException("The operation was aborted.", "AbortError")
     );
@@ -323,17 +335,17 @@ async function* fetchStreamViaPort(input, init, opts) {
     signal?.addEventListener?.("abort", abortBySignal, { once: true });
   }
 
-  if (!alreadyAborted) {
-    port.postMessage({
-      action: "start",
-      // AbortSignal 不能可靠穿过 Port 结构化克隆，background 端会为本次连接重新创建控制器。
-      args: { input, init, opts: serializableOpts },
-    });
-  }
-
   try {
+    if (!alreadyAborted) {
+      port.postMessage({
+        action: "start",
+        // AbortSignal 不能可靠穿过 Port 结构化克隆，background 端会为本次连接重新创建控制器。
+        args: { input, init, opts: serializableOpts },
+      });
+    }
     yield* asyncQueue.iterate();
   } finally {
+    settled = true;
     signal?.removeEventListener?.("abort", abortBySignal);
     // 前台停止消费流时断开 Port，background 会据此 abort 底层 fetch，避免请求继续空跑。
     disconnectPort();

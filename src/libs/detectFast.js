@@ -152,13 +152,17 @@ export const detectLangFast = async (text) => {
   const sample = text.slice(0, MAX_DETECT_TEXT_LEN);
   let lang = quickDetectLang(sample);
 
-  if (!lang) {
+  if (!lang && typeof browser?.i18n?.detectLanguage === "function") {
+    let timeout;
     try {
       const res = await Promise.race([
-        Promise.resolve(browser?.i18n?.detectLanguage?.(sample)),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("detect timeout")), DETECT_TIMEOUT)
-        ),
+        Promise.resolve(browser.i18n.detectLanguage(sample)),
+        new Promise((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error("detect timeout")),
+            DETECT_TIMEOUT
+          );
+        }),
       ]);
       const detected = res?.languages?.[0]?.language;
       const normalizedLang = normalizeLanguageCode(detected);
@@ -170,6 +174,8 @@ export const detectLangFast = async (text) => {
       }
     } catch (err) {
       kissLog("detect lang fast", err);
+    } finally {
+      clearTimeout(timeout);
     }
   }
 

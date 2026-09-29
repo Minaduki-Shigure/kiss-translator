@@ -75,7 +75,12 @@ jest.mock("./trans", () => ({
   handleSummarize: jest.fn(),
 }));
 
-import { apiDict, apiSubtitle, apiTranslate } from "./index";
+import {
+  apiDict,
+  apiSubtitle,
+  apiTranslate,
+  apiSummarizeContext,
+} from "./index";
 import { handleDict, handleSubtitle, handleTranslate } from "./trans";
 import { fetchData, fnPolyfill } from "../libs/fetch";
 import { getSetting } from "../libs/storage";
@@ -109,6 +114,64 @@ const getBuiltinAiApiSetting = (httpTimeout) => ({
   fetchInterval: 100,
   fetchLimit: 1,
   httpTimeout,
+});
+
+describe("Safari local-only provider handling", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
+
+  beforeEach(() => {
+    process.env.REACT_APP_CLIENT = "safari";
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
+  });
+
+  test.each([
+    [
+      "text",
+      (apiSetting) =>
+        apiTranslate({
+          text: "private source text",
+          toLang: "zh-CN",
+          apiSetting,
+        }),
+    ],
+    [
+      "subtitle",
+      (apiSetting) =>
+        apiSubtitle({
+          events: [{ start: 0, end: 1000, text: "private source text" }],
+          toLang: "zh-CN",
+          apiSetting,
+        }),
+    ],
+    [
+      "summary",
+      (apiSetting) =>
+        apiSummarizeContext({
+          transcript: "private source text",
+          apiSetting,
+        }),
+    ],
+  ])(
+    "rejects an imported BuiltinAI %s request without cache or network work",
+    async (_kind, translate) => {
+      const apiSetting = getBuiltinAiApiSetting(30);
+      await expect(translate(apiSetting)).rejects.toThrow(
+        "BuiltinAI is unavailable in Safari. Choose another translation service."
+      );
+      expect(getHttpCachePolyfill).not.toHaveBeenCalled();
+      expect(fetchData).not.toHaveBeenCalled();
+      expect(fnPolyfill).not.toHaveBeenCalled();
+      expect(handleTranslate).not.toHaveBeenCalled();
+      expect(handleSubtitle).not.toHaveBeenCalled();
+      expect(getBatchQueue).not.toHaveBeenCalled();
+      expect(apiSetting.apiType).toBe(OPT_TRANS_BUILTINAI);
+    }
+  );
 });
 
 describe("apiSubtitle cache identity", () => {

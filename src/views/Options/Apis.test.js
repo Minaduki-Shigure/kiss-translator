@@ -573,10 +573,44 @@ describe("Apis ordering and master-detail layout", () => {
 });
 
 describe("Apis conditional option groups", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
+
   afterEach(() => {
     jest.clearAllMocks();
     document.body.innerHTML = "";
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
   });
+
+  test.each(["safari", "chrome"])(
+    "%s shows the imported BuiltinAI configuration with platform-appropriate controls",
+    async (client) => {
+      process.env.REACT_APP_CLIENT = client;
+      const update = jest.fn();
+      const view = await renderApis(
+        createApi({ apiSlug: "BuiltinAI", apiType: OPT_TRANS_BUILTINAI }),
+        update
+      );
+      try {
+        const unavailable = client === "safari";
+        const disabledSwitch = view.container.querySelector(
+          'input[name="isDisabled"]'
+        );
+        const testButton = Array.from(
+          view.container.querySelectorAll("button")
+        ).find((button) => button.textContent === "click_test");
+
+        expect(disabledSwitch.disabled).toBe(unavailable);
+        expect(testButton.disabled).toBe(unavailable);
+        expect(
+          view.container.textContent.includes("safari_builtin_ai_hint")
+        ).toBe(unavailable);
+        expect(update).not.toHaveBeenCalled();
+      } finally {
+        view.unmount();
+      }
+    }
+  );
 
   test("omits the runtime option shell when the API has no matching controls", async () => {
     const view = await renderApis(

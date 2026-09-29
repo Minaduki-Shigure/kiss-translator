@@ -8,6 +8,7 @@ import { tryDetectLang } from "../../libs/detect";
 import { mountShadowHost } from "../../libs/shadowHost";
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const mockRenderedApiSlugs = [];
 
 jest.mock("../../apis", () => ({
   apiDict: jest.fn(),
@@ -37,8 +38,9 @@ jest.mock("./TranCont", () => {
     translateVariants,
     detectedLang,
     sourceDetectionPending,
-  }) =>
-    React.createElement("div", {
+  }) => {
+    mockRenderedApiSlugs.push(apiSlug);
+    return React.createElement("div", {
       "data-testid": "tran-cont",
       "data-api-slug": apiSlug,
       "data-text": text,
@@ -47,6 +49,7 @@ jest.mock("./TranCont", () => {
       "data-detected-lang": detectedLang,
       "data-source-detection-pending": String(sourceDetectionPending),
     });
+  };
 });
 
 jest.mock("./DictCont", () => {
@@ -137,6 +140,68 @@ function renderTranForm(
     },
   };
 }
+
+describe("TranForm Safari provider choices", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
+  const storageKey = "safari-local-only-choice";
+
+  afterEach(() => {
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
+    window.localStorage.removeItem(storageKey);
+  });
+
+  test.each(["props", "saved storage"])(
+    "preserves a local-only choice from %s without ever rendering a remote request",
+    async (source) => {
+      process.env.REACT_APP_CLIENT = "safari";
+      mockRenderedApiSlugs.length = 0;
+      if (source === "saved storage") {
+        window.localStorage.setItem(
+          storageKey,
+          JSON.stringify(["saved-local"])
+        );
+      }
+      const view = renderTranForm({
+        text: "Private local translation text",
+        apiSlugs: source === "props" ? ["saved-local"] : ["cloud"],
+        apiSlugsStorageKey: source === "saved storage" ? storageKey : undefined,
+        simpleStyle: false,
+        aiDictApiSlug: "-",
+        enDict: "-",
+        transApis: [
+          { apiSlug: "saved-local", apiName: "Local AI", apiType: "BuiltinAI" },
+          { apiSlug: "cloud", apiName: "Cloud API", apiType: "OpenAI" },
+        ],
+      });
+      try {
+        await flushEffects();
+        expect(mockRenderedApiSlugs).toEqual([]);
+        expect(view.container.textContent).toContain("safari_builtin_ai_hint");
+        const input = view.container.querySelector('input[name="apiSlugs"]');
+        const button = input
+          .closest(".MuiInputBase-root")
+          .querySelector('[role="combobox"]');
+        await act(async () => {
+          button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+        });
+        expect(
+          Array.from(document.body.querySelectorAll('[role="option"]')).map(
+            (option) => option.getAttribute("data-value")
+          )
+        ).toEqual(["cloud"]);
+        if (source === "saved storage") {
+          expect(JSON.parse(window.localStorage.getItem(storageKey))).toEqual([
+            "saved-local",
+          ]);
+        }
+      } finally {
+        act(() => view.root.unmount());
+        view.host.remove();
+      }
+    }
+  );
+});
 
 describe("TranForm startup settings", () => {
   const remoteDefaults = {

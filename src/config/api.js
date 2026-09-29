@@ -3,6 +3,8 @@
  * @description 翻译 API 配置模块，定义各类翻译引擎和词典的默认请求参数、模型名称、语言映射以及 AI 翻译提示词模版。
  */
 
+import { CLIENT_SAFARI } from "./client";
+
 // --- 基础请求控制参数 ---
 export const DEFAULT_HTTP_TIMEOUT = 30; // 调用超时时间 (单位：秒)
 export const DEFAULT_FETCH_LIMIT = 10; // 默认最大并行请求/任务数量
@@ -81,6 +83,13 @@ export const OPT_TRANS_OLLAMA = "Ollama"; // 本地部署 Ollama 模型翻译
 export const OPT_TRANS_OPENROUTER = "OpenRouter"; // OpenRouter 多模型聚合 API 翻译
 export const OPT_TRANS_ORCAROUTER = "OrcaRouter"; // OrcaRouter 多模型聚合 API 翻译
 export const OPT_TRANS_CUSTOMIZE = "Custom"; // 自定义翻译 API
+
+// Safari does not expose Chrome's on-device Translator / LanguageDetector APIs.
+// Keep this independent of the execution context: Chrome's background worker
+// can lack these globals even when its extension pages support BuiltinAI.
+export const isApiTypeSupported = (apiType) =>
+  process.env.REACT_APP_CLIENT !== CLIENT_SAFARI ||
+  apiType !== OPT_TRANS_BUILTINAI;
 
 // 内置支持的翻译引擎
 export const OPT_ALL_TRANS_TYPES = [
@@ -1758,8 +1767,12 @@ export const DEFAULT_API_LIST = OPT_ALL_TRANS_TYPES.map((apiType) =>
     apiSlug: apiType,
     apiName: apiType,
     apiType,
-    isDisabled: !DEFAULT_ENABLED_API_TYPES.has(apiType),
-    sortOrder: DEFAULT_ENABLED_API_TYPES.has(apiType) ? 0 : 999,
+    isDisabled:
+      !DEFAULT_ENABLED_API_TYPES.has(apiType) || !isApiTypeSupported(apiType),
+    sortOrder:
+      DEFAULT_ENABLED_API_TYPES.has(apiType) && isApiTypeSupported(apiType)
+        ? 0
+        : 999,
   })
 );
 

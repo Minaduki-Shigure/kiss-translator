@@ -186,6 +186,7 @@ function renderPopupCont(props = {}, { statefulRule = false } = {}) {
 }
 
 describe("PopupCont capability parity", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
   beforeEach(() => {
     mockRealTouchControl = false;
     mockIsExt = false;
@@ -210,8 +211,42 @@ describe("PopupCont capability parity", () => {
   });
 
   afterEach(() => {
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
     jest.useRealTimers();
     document.body.innerHTML = "";
+  });
+
+  test("hides unsupported Safari services without replacing the saved local-only rule", async () => {
+    process.env.REACT_APP_CLIENT = "safari";
+    const setRule = jest.fn();
+    const rule = { apiSlug: "saved-local", transOpen: "true" };
+    const view = renderPopupCont({
+      rule,
+      setRule,
+      setting: {
+        transApis: [
+          { apiSlug: "saved-local", apiName: "Local AI", apiType: "BuiltinAI" },
+          { apiSlug: "cloud", apiName: "Cloud API", apiType: "OpenAI" },
+        ],
+      },
+    });
+    try {
+      await flushEffects();
+      const services = Array.from(
+        view.container.querySelectorAll(".kt-popup-service")
+      );
+      expect(services.map((service) => service.textContent)).toEqual([
+        "Cloud API",
+      ]);
+      expect(services[0].getAttribute("aria-pressed")).toBe("false");
+      expect(view.container.textContent).toContain("safari_builtin_ai_hint");
+      expect(rule.apiSlug).toBe("saved-local");
+      expect(setRule).not.toHaveBeenCalled();
+      expect(saveRule).not.toHaveBeenCalled();
+    } finally {
+      view.cleanup();
+    }
   });
 
   test("real touch controls appear below the hero and use the page receiver", async () => {
