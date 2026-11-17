@@ -55,6 +55,12 @@ try {
 
     process.env.BUILD_PATH = `./${targetDir}`;
     process.env.REACT_APP_CLIENT = clientEnv;
+    if (target === "safari") {
+      const { releaseVersion } = await fs.readJson("safari.config.json");
+      if (!releaseVersion || typeof releaseVersion !== "string")
+        throw new Error("Missing Safari releaseVersion in safari.config.json");
+      process.env.REACT_APP_SAFARI_RELEASE_VERSION = releaseVersion;
+    }
     process.env.REACT_APP_WEB_APP = target === "homepage" ? "homepage" : "";
     process.env.REACT_APP_FILE_BRIDGE_DEV =
       target === "edge-dev" ? "true" : "false";

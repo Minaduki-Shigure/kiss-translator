@@ -15,6 +15,12 @@ import {
   getSettingsSearchPrerequisite,
 } from "./search";
 import SettingsSearchTarget from "./SettingsSearchTarget";
+import {
+  fetchLatestSafariVersion,
+  isNewerSafariVersion,
+  parseSafariVersion,
+  safariReleaseURL,
+} from "./safariUpdate";
 
 const WIDE_PAGE_PATHS = new Set([
   "/apis",
@@ -106,9 +112,12 @@ export default function Layout() {
   const i18n = useI18n();
   const { setting } = useSetting();
   const checkUpdate = setting?.checkUpdate ?? true;
-  const currentVersion = isGm
-    ? window.APP_INFO?.version
-    : process.env.REACT_APP_VERSION;
+  const isSafari = process.env.REACT_APP_CLIENT === "safari";
+  const currentVersion = isSafari
+    ? process.env.REACT_APP_SAFARI_RELEASE_VERSION
+    : isGm
+      ? window.APP_INFO?.version
+      : process.env.REACT_APP_VERSION;
   const [navigationOpen, setNavigationOpen] = useState(false);
   const navigationTriggerRef = useRef(null);
   const backgroundRef = useRef(null);
@@ -121,18 +130,25 @@ export default function Layout() {
 
   useEffect(() => {
     if (process.env.NODE_ENV === "test") return undefined;
-    if (!checkUpdate || !isValidVersion(currentVersion)) {
+    if (
+      !checkUpdate ||
+      !(isSafari
+        ? parseSafariVersion(currentVersion)
+        : isValidVersion(currentVersion))
+    ) {
       setLatestVersion("");
       return undefined;
     }
     let active = true;
     const controller = new AbortController();
-    fetchLatestVersion({ signal: controller.signal })
+    const fetchVersion = isSafari
+      ? fetchLatestSafariVersion
+      : fetchLatestVersion;
+    const isNewer = isSafari ? isNewerSafariVersion : isNewerVersion;
+    fetchVersion({ signal: controller.signal })
       .then((version) => {
         if (active) {
-          setLatestVersion(
-            isNewerVersion(version, currentVersion) ? version : ""
-          );
+          setLatestVersion(isNewer(version, currentVersion) ? version : "");
         }
       })
       .catch((error) => {
@@ -144,7 +160,7 @@ export default function Layout() {
       active = false;
       controller.abort();
     };
-  }, [checkUpdate, currentVersion]);
+  }, [checkUpdate, currentVersion, isSafari]);
 
   useEffect(() => {
     setNavigationOpen(false);
@@ -349,9 +365,11 @@ export default function Layout() {
                   </span>
                   <a
                     href={
-                      isGm
-                        ? process.env.REACT_APP_USERSCRIPT_DOWNLOADURL
-                        : process.env.REACT_APP_RELEASES_URL
+                      isSafari
+                        ? safariReleaseURL(latestVersion)
+                        : isGm
+                          ? process.env.REACT_APP_USERSCRIPT_DOWNLOADURL
+                          : process.env.REACT_APP_RELEASES_URL
                     }
                     target="_blank"
                     rel="noreferrer"
