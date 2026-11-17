@@ -8,7 +8,7 @@
 
 当前包使用 **Apple Development** 证书为容器和扩展签名，支持 Apple Silicon 与 Intel。它不是 Developer ID 签名且经 Apple 公证的公开分发包。证书、网站访问授权和翻译接口配置均以自己的账户与设备为准；源码及安装包不含翻译 API 密钥。
 
-建议使用 Safari 18.4 或更新版本；本次维护在 Safari 26.6.1 / macOS 15.7.9 上进行。原生容器部署目标为 macOS 13，尚未对所有旧系统组合做实机测试。iOS 尚不在本次签名包的交付范围。
+建议使用 Safari 18.4 或更新版本；2.2.5 的构建环境为 macOS 15.8.2、已安装 Safari 27.2、Xcode 26.3。原生容器部署目标为 macOS 13，尚未对所有旧系统组合做实机测试。iOS 不包含在此包中。
 
 ## 平台适配
 
@@ -18,6 +18,7 @@
 | 远程 AI、普通翻译 API、批量与 SSE 流式请求 | 保留浏览器后台 fetch / Port 链路；连接提前关闭时明确报错，避免一直等待；可用性依赖所选接口与网站授权 |
 | YouTube 字幕、动态 Shadow DOM | 使用包内脚本的 MAIN world 注入，限定请求者的标签页和 frame，避免网页 CSP 拦截 script 标签 |
 | Chrome BuiltinAI | Safari 禁用该接口，保留导入配置；显式选择本地模型时提示不可用，不自动切换远程服务 |
+| 新版 LocalAI、第三方服务插件、PDF/EPUB 文件翻译 | 上游给 Chrome/Edge/Firefox 构建专用运行时与文件桥，目前 Safari 没有这些入口。本地 OCR、ASR 不随包；已有内置 Custom 和兼容的远程服务可继续使用 |
 | 本地语言判断 | i18n.detectLanguage 缺失时使用已有保守字符/词频快判；无法确定时交给翻译服务自动识别，也可选择远程检测 |
 | 朗读 | 保留 Web Speech fallback，不申请 Safari 不支持的 tts 权限 |
 | 设置与同步 | storage.local + unlimitedStorage；WebDAV、KISS-Worker、Gist 保留原协议，不依赖 Safari storage.sync |
@@ -52,7 +53,7 @@ bash scripts/safari/package-development.sh "$TEAM_ID" "$CERT_SHA1" --skip-build
 
 ## 验证
 
-首版安装包与已验证范围见 [2.1.0-safari.1 验证记录](SAFARI-2.1.0-safari.1.md)。
+本次版本说明见 [2.2.5-safari.1](releases/2.2.5-safari.1.md)；首版记录见 [2.1.0-safari.1](SAFARI-2.1.0-safari.1.md)。
 
 ```sh
 CI=true pnpm test --watchAll=false --maxWorkers=2
@@ -67,7 +68,15 @@ pnpm test:safari:native
 
 ## 更新上游
 
-保持 `origin` 指向本 fork、`upstream` 指向 fishjar/kiss-translator。合并上游前建立分支或 bundle 备份，保留 Safari 专用构建、原生模板和回归测试。更新依赖时使用固定 pnpm 版本并审查锁文件变化；不要将 build、dist、私钥、证书或本地账户配置提交到 Git。
+以 **上游正式标签** 为基线；`origin` 指向本 fork，`upstream` 指向 fishjar/kiss-translator。`safari.config.json` 记录基线标签、完整提交、以及从 dev 提前回移的修复。用 `git diff <基线标签>..origin/safari/macos-port` 可审阅完整差异，不依赖手工同步的源码快照。
+
+下次更新时，在干净工作树执行以下步骤（将占位符替换为实际版本）：
+
+1. `git fetch upstream --tags` 和 `git fetch origin`，对照上游 Release 说明核实新标签，记录 `git rev-parse '<新标签>^{commit}'`。本地备份上次已发布分支和 DMG。
+2. `git switch -c release/safari-<新版本> <新标签>`，然后 `git merge --no-ff --no-commit origin/safari/macos-port`。这样新基线是第一父提交，旧 Safari 分支仍是祖先；不要 rebase 或强推已发布分支。保留上游架构，把 Safari 差异适配到新入口；已被上游吸收的补丁不再重复应用。
+3. 审阅 `git diff --cached <新标签>` 并提交。必要的未发布上游修复用 `git cherry-pick -x <提交>` 单独回移。更新 Safari 元数据与发布说明；保持上游 package/manifest 版本，不为 Safari 专用修订改写 Chrome、Firefox 或 userscript 的版本号。
+4. 固定 pnpm 版本安装、运行全量 Jest；构建 Safari，执行隔离 WebKit 测试，最后签名并从 DMG 中重新提取资源复测。升级测试应使用旧配置的副本，核实迁移后的服务选择，不在开发者日用 Safari 中自动安装候选。
+5. 在 fork 验证待发布提交的 CI 后，将维护分支更新到包含两个父历史的提交。用 `safari-<releaseVersion>` 注解标签发布签名 DMG、同名 SHA-256 文件和仅含 `releaseVersion` 的 `safari-version.txt`。这些是 Safari 发行物；上游的 `v*` 工作流发布的是其他平台。绝不覆盖已发布的包或标签，不提交签名凭据。
 
 当前维护分支：https://github.com/Minaduki-Shigure/kiss-translator/tree/safari/macos-port
 

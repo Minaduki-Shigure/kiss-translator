@@ -49,14 +49,28 @@ async function* files(directory, prefix = "") {
 }
 let resourceCount = 0;
 const hashes = {};
+const licenseBanners = new Set();
+const licenseFiles = new Set();
 for await (const file of files(source)) {
   const expected = await readFile(path.join(source, file));
   const actual = await readFile(path.join(resources, file));
   assert.ok(actual.equals(expected), `Packaged resource differs from Safari build: ${file}`);
+  if (file.endsWith(".js.LICENSE.txt")) {
+    assert.ok(actual.toString("utf8").trim().length > 0, `Empty license notice: ${file}`);
+    licenseFiles.add(file);
+  } else if (file.endsWith(".js")) {
+    const banner = actual.subarray(0, 1024).toString("utf8").match(/^\/\*! For license information please see ([^\r\n*]+) \*\//);
+    if (banner) {
+      assert.equal(banner[1], `${path.basename(file)}.LICENSE.txt`, `Unexpected license banner for ${file}`);
+      licenseBanners.add(`${file}.LICENSE.txt`);
+    }
+  }
   hashes[file] = createHash("sha256").update(actual).digest("hex");
   resourceCount++;
 }
 assert.ok(resourceCount > 0, "Safari build resources are empty");
+assert.ok(licenseFiles.size > 0, "Missing extracted JavaScript license notices");
+assert.deepEqual(licenseBanners, licenseFiles, "JavaScript license banners must point to the matching packaged notices");
 
 function plistValue(bundle, key) {
   return execFileSync("/usr/libexec/PlistBuddy", ["-c", `Print :${key}`, path.join(bundle, "Contents/Info.plist")], { encoding: "utf8" }).trim();
@@ -101,4 +115,4 @@ for (const [bundle, executable, bundleId] of [
   }
 }
 execFileSync("/usr/bin/codesign", ["--verify", "--deep", "--strict", "--all-architectures", app], { stdio: "inherit" });
-console.log(JSON.stringify({ version: manifest.version, buildNumber, resourceCount, signing: "Apple Development", notarized: false, signatures, resourcesSHA256: hashes }, null, 2));
+console.log(JSON.stringify({ version: manifest.version, buildNumber, resourceCount, licenseNotices: [...licenseFiles].sort(), signing: "Apple Development", notarized: false, signatures, resourcesSHA256: hashes }, null, 2));

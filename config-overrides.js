@@ -187,7 +187,8 @@ const extWebpack = (config, env) => {
                 comments: false,
               },
             },
-            extractComments: false,
+            // Keep license notices alongside the signed Safari resources.
+            extractComments: process.env.REACT_APP_CLIENT === "safari",
           });
         }
         return plugin;

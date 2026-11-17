@@ -10,13 +10,13 @@
 
 此版本使用现有 **Apple Development** 证书签名，供个人开发与自用；它不是 Developer ID 签名且经 Apple 公证的公开发行版。macOS 可能在首次启动时提示开发者未验证，此时请在系统设置“隐私与安全性”中确认来源后允许打开。不要关闭整个系统的 Gatekeeper。
 
-更新前可先在扩展设置中导出配置备份。退出容器 App，用新版替换“应用程序”中的同名 App，推出映像，再打开容器并刷新网页。每个版本保持相同 Bundle ID，Safari 配置应保留；跨版本仍建议留一份导出备份。
+从 2.1.x 升级到 2.2.x 前，请先在扩展设置中导出配置备份。退出容器 App，用新版替换“应用程序”中的同名 App，推出映像，再打开容器并刷新网页。每个版本保持相同 Bundle ID；升级后请核对翻译服务、站点规则和网站授权。
 
-构建流程验证了签名、通用架构、版本及 DMG 内扩展资源。网页授权、翻译源网络可用性、付费额度及实际 Safari 交互仍取决于本机设置与第三方服务。Chrome 专有的内置翻译/语言模型接口在 Safari 不可用。
+构建流程验证了签名、通用架构、版本及 DMG 内扩展资源。网页授权、翻译源网络可用性、付费额度及实际 Safari 交互仍取决于本机设置与第三方服务。此 Safari 版本不提供 Chrome BuiltinAI、LocalAI 本地推理或外部服务插件的运行环境。以前保存的这些服务配置会保留；需要继续翻译时，请自行选择可用服务，扩展不会将明确选用本地服务的文本自动改发给云端。
 
 ## 来源与源码
 
-Kiss Translator 的上游作者是 Gabe / fishjar 及项目贡献者；本 Safari 移植由 Minaduki-Shigure 的 fork 维护。保留上游版权和 GPLv3 许可，完整许可文本随包提供为 `LICENSE.txt`；打包的第三方 JavaScript 许可说明亦保留在扩展资源内。
+Kiss Translator 的上游作者是 Gabe / fishjar 及项目贡献者；本 Safari 移植由 Minaduki-Shigure 的 fork 维护。上游 GPLv3 许可全文随包提供为 `LICENSE.txt`。对含有 Terser 可识别许可注释的 JavaScript 分包，扩展资源内保留对应的 `*.js.LICENSE.txt`，文件名亦见分包首行；这些文件不是所有依赖的完整许可证清单。
 
 - 上游源码：[fishjar/kiss-translator](https://github.com/fishjar/kiss-translator)
 - Safari 移植源码及构建脚本：[Minaduki-Shigure/kiss-translator，safari/macos-port 分支](https://github.com/Minaduki-Shigure/kiss-translator/tree/safari/macos-port)
