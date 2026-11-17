@@ -30,7 +30,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: pnpm test --watchAll=false --maxWorkers=2
+      - run: pnpm run test --watchAll=false --maxWorkers=2
         env:
           CI: "true"
       - run: pnpm build:safari-output

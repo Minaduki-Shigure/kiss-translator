@@ -56,7 +56,7 @@ bash scripts/safari/package-development.sh "$TEAM_ID" "$CERT_SHA1" --skip-build
 本次版本说明见 [2.2.5-safari.1](releases/2.2.5-safari.1.md)；首版记录见 [2.1.0-safari.1](SAFARI-2.1.0-safari.1.md)。
 
 ```sh
-CI=true pnpm test --watchAll=false --maxWorkers=2
+CI=true pnpm run test --watchAll=false --maxWorkers=2
 pnpm test:safari:native
 ```
 
