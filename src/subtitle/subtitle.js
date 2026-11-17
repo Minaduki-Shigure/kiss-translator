@@ -1,7 +1,6 @@
 import { terminologyWarningHandler } from "../libs/terminologyWarning";
 import { loadTerminologySnapshot } from "../libs/terminologyStorage";
 import { YouTubeInitializer } from "./YouTubeCaptionProvider.js";
-import { isMatch } from "../libs/utils.js";
 import { availableApiForScene } from "../config/serviceSelection.js";
 import { DEFAULT_SUBTITLE_SETTING } from "../config/setting.js";
 import { STOKEY_SETTING } from "../config/storage.js";
@@ -10,9 +9,9 @@ import { injectJs, INJECTOR } from "../injectors/index.js";
 import { saveEdit } from "../libs/storage.js";
 
 // 各视频平台对应的字幕初始化拦截器配置
-// 目前仅配置了 YouTube 的匹配规则 (pattern) 及其对应的初始化引导器 (YouTubeInitializer)
+// 目前仅配置了 YouTube 的匹配规则 (origin) 及其对应的初始化引导器 (YouTubeInitializer)
 const providers = [
-  { pattern: "https://www.youtube.com", start: YouTubeInitializer },
+  { origin: "https://www.youtube.com", start: YouTubeInitializer },
 ];
 
 /** Persist only the subtitle position against the latest stored settings. */
@@ -51,7 +50,10 @@ export async function runSubtitle({ href, setting }) {
     }
 
     // 根据当前网页 URL (href) 查找是否有匹配的字幕服务提供商（例如匹配 YouTube 网址）
-    const provider = providers.find((item) => isMatch(href, item.pattern));
+    // A text match on the full URL also accepts another website that mentions
+    // YouTube in its query string. Only install the page bridge on its owner.
+    const origin = new URL(href).origin;
+    const provider = providers.find((item) => origin === item.origin);
     if (provider) {
       // 1. 注入底层的劫持脚本 (INJECTOR.subtitle)
       // 该操作会在原生页面环境中动态注入一段 JS 脚本，用以劫持底层的 XHR (XMLHttpRequest) 请求。

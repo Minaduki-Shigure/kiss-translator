@@ -1,3 +1,4 @@
+import { isApiTypeSupported } from "../config/platformApiSupport";
 import { supportsApiCapability } from "../config/serviceSelection";
 
 export function getEnabledApis(transApis = []) {
@@ -7,6 +8,7 @@ export function getEnabledApis(transApis = []) {
       ({ api }) =>
         api?.apiSlug &&
         !api.isDisabled &&
+        isApiTypeSupported(api) &&
         supportsApiCapability(api, "translate")
     )
     .sort((a, b) => {
@@ -18,6 +20,10 @@ export function getEnabledApis(transApis = []) {
 }
 
 export function resolveApiSelection(transApis, apiSlug) {
+  // Preserve an explicit, unavailable provider so the dispatcher explains the
+  // limitation; falling back could send text meant for a local model remotely.
+  const selected = transApis?.find((api) => api && api.apiSlug === apiSlug);
+  if (selected && !isApiTypeSupported(selected)) return selected;
   const enabledApis = getEnabledApis(transApis);
   return enabledApis.find((api) => api.apiSlug === apiSlug) || enabledApis[0];
 }

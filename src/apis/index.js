@@ -39,6 +39,7 @@ import {
   OPT_TRANS_GOOGLE,
   OPT_TRANS_BAIDU,
   OPT_TRANS_TENCENT,
+  isApiTypeSupported,
   INPUT_PLACE_TONE,
   INPUT_PLACE_GLOSSARY,
   defaultContextSummaryPrompt,
@@ -85,6 +86,16 @@ export {
 const PROMPT_CACHE_SALT = "prompt-cache-default-pair-v5";
 const PROMPT_CACHE_SCOPE_BATCH = "batch";
 const PROMPT_CACHE_SCOPE_NOBATCH = "nobatch";
+
+// A saved local-only provider must never silently become a remote request when
+// settings are shared with Safari. Check before cache lookup or dispatch.
+function requireSupportedApi(apiSetting) {
+  if (!isApiTypeSupported(apiSetting)) {
+    throw new Error(
+      `${apiSetting.apiType} is unavailable in Safari. Choose another translation service.`
+    );
+  }
+}
 const PROMPT_CACHE_SCOPE_DICT = "dict";
 const PROMPT_CACHE_SCOPE_PLAIN = "plain";
 const PROMPT_CACHE_SCOPE_QWEN_MT = "qwen-mt";
@@ -636,6 +647,7 @@ const apiBuiltinAITranslate = async ({
 export const apiTranslate = async (args) => {
   const { scene = {}, terminologyTables, normalTermsApplied = false } = args;
   const api = args.apiSetting || DEFAULT_API_SETTING;
+  requireSupportedApi(api);
   if (!args.scene && !api.terms && !api.termsList?.length)
     return executeApiTranslate(args);
   const sources = [...terminologySourceList(scene), api];
@@ -970,6 +982,7 @@ export const apiDict = async ({
 
   apiSetting = resolveEmptyApiPrompts(apiSetting, "dictionary");
   const { apiType } = apiSetting;
+  requireSupportedApi(apiSetting);
   if (!supportsApiCapability(apiSetting, "dictionary")) {
     throw new Error("AI dictionary only supports AI APIs.");
   }
@@ -1061,6 +1074,7 @@ export const apiDict = async ({
  */
 export const apiSubtitle = async (args) => {
   const api = args.apiSetting;
+  requireSupportedApi(api);
   const scene = args.scene;
   if (!scene && !api?.termsList?.length && !api?.terms)
     return executeApiSubtitle(args);
@@ -1211,6 +1225,7 @@ export const apiSummarizeContext = async ({
   transcript,
   apiSetting,
 }) => {
+  requireSupportedApi(apiSetting);
   if (!supportsApiCapability(apiSetting, "summarize"))
     throw Object.assign(
       new Error("Summary capability is disabled or unsupported."),
@@ -1307,6 +1322,7 @@ export const apiSummarizeVideo = async ({
   force = false,
   signal,
 }) => {
+  requireSupportedApi(apiSetting);
   if (!supportsApiCapability(apiSetting, "summarize"))
     throw Object.assign(
       new Error("Summary capability is disabled or unsupported."),

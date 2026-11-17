@@ -6,6 +6,7 @@ import {
   API_SPE_TYPES,
   normalizeApiModelListUrls,
   normalizeApiThinkingSettings,
+  isApiTypeSupported,
 } from "../config";
 import { useSetting } from "./Setting";
 import { createBuiltinInstance } from "../builtin-plugins";
@@ -189,6 +190,7 @@ export function useApiList() {
       transApis.filter(
         (api) =>
           !api.isDisabled &&
+          isApiTypeSupported(api) &&
           isApiConfigured(api) &&
           supportsApiCapability(api, "translate")
       ),
@@ -204,6 +206,7 @@ export function useApiList() {
   // 添加一个新的自定义 API
   const addApi = useCallback(
     (apiType) => {
+      if (!isApiTypeSupported(apiType)) return;
       if (typeof apiType === "object") {
         updateSetting((prev) => ({
           ...prev,
@@ -357,7 +360,11 @@ export function useApiList() {
         const apiSlugSet = new Set(apiSlugs);
         const nextApis = getDisplayOrderedApis(prev?.transApis || []).map(
           (api) => {
-            if (!apiSlugSet.has(api.apiSlug) || !api.isDisabled) {
+            if (
+              !apiSlugSet.has(api.apiSlug) ||
+              !api.isDisabled ||
+              !isApiTypeSupported(api)
+            ) {
               return api;
             }
 

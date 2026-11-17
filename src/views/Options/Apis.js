@@ -122,6 +122,7 @@ import {
   getDictionaryPromptOptions,
   getPromptDisplayName,
   getSubtitlePromptOptions,
+  isApiTypeSupported,
 } from "../../config";
 import ValidationInput from "../../hooks/ValidationInput";
 import { supportsApiCapability } from "../../config/serviceSelection";
@@ -167,6 +168,20 @@ const QWEN_MT_MODELS = [
 
 function ApiFields({ apiSlug, deleteApi, copyApi, onCollapse, onDirtyChange }) {
   const { api } = useApiItem(apiSlug);
+  const i18n = useI18n();
+  if (!isApiTypeSupported(api))
+    return (
+      <Stack spacing={2}>
+        <Typography component="h2">{getApiDisplayName(api)}</Typography>
+        <Alert severity="info">
+          {i18n(
+            api.apiType === OPT_TRANS_BUILTINAI
+              ? "safari_builtin_ai_hint"
+              : "service_configured_unavailable"
+          )}
+        </Alert>
+      </Stack>
+    );
   if (api?.provider && api.provider.implementation.kind !== "native")
     return (
       <PluginInstanceFields
@@ -1892,14 +1907,14 @@ function ApiListItem({
           provider={api.provider}
           size={38}
           imageSize={22}
-          disabled={api.isDisabled}
+          disabled={api.isDisabled || !isApiTypeSupported(api)}
           lightSurface
         />
         <Box
           sx={{
             minWidth: 0,
             flex: 1,
-            opacity: api.isDisabled ? 0.5 : 1,
+            opacity: api.isDisabled || !isApiTypeSupported(api) ? 0.5 : 1,
           }}
         >
           <Typography

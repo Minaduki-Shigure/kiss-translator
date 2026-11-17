@@ -324,3 +324,30 @@ test("legacy grant removals do not cancel active services", async () => {
   relay.change({ [STOKEY_SETTING]: { newValue: { transApis: [] } } }, "local");
   pages.forEach((page) => expect(page.disconnect).toHaveBeenCalledTimes(1));
 });
+
+test("Safari rejects plugin ports before starting a scripting or offscreen host", async () => {
+  const previousClient = process.env.REACT_APP_CLIENT;
+  process.env.REACT_APP_CLIENT = "safari";
+  try {
+    const relay = setup(),
+      page = client();
+    relay.connect(page);
+    page.onMessage.emit({
+      type: "start",
+      serviceId: "one",
+      capability: "translate",
+    });
+    await flush();
+    expect(page.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "error",
+        error: expect.objectContaining({ code: "HOST_UNAVAILABLE" }),
+      })
+    );
+    expect(localAiHost).not.toHaveBeenCalled();
+    expect(serveProviderPort).not.toHaveBeenCalled();
+  } finally {
+    if (previousClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = previousClient;
+  }
+});

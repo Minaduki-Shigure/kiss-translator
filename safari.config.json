@@ -1,0 +1,8 @@
+{
+  "appName": "Kiss Translator",
+  "bundleIdentifier": "com.minaduki.kiss-translator.safari",
+  "version": "2.2.5",
+  "buildNumber": 2020501,
+  "releaseVersion": "2.2.5-safari.1-candidate",
+  "minimumMacOSVersion": "13.0"
+}

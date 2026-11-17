@@ -7,6 +7,7 @@ import { localAiHost } from "../libs/localAiBackground";
 import { STOKEY_SETTING } from "../config/storage";
 import { availableServiceIds } from "./lifecycle";
 import { providerError } from "./capabilities";
+import { CLIENT_SAFARI } from "../config/client";
 
 /** Connect directly to the shared host using bounded IPC. */
 export function invokeBackgroundPlugin(
@@ -17,6 +18,11 @@ export function invokeBackgroundPlugin(
 ) {
   options = serviceInvocationOptions(instance, options);
   return createInvocation(async (ctx) => {
+    if (process.env.REACT_APP_CLIENT === CLIENT_SAFARI)
+      throw providerError(
+        "HOST_UNAVAILABLE",
+        "This provider host is unavailable in Safari."
+      );
     if (
       !instance.provider ||
       instance.provider.implementation?.kind === "native"

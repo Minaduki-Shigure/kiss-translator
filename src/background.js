@@ -17,6 +17,7 @@ import {
   MSG_CONTEXT_MENUS,
   MSG_COMMAND_SHORTCUTS,
   MSG_INJECT_JS,
+  MSG_INJECT_PACKAGED_SCRIPT,
   MSG_INJECT_CSS,
   MSG_UPDATE_CSP,
   MSG_BUILTINAI_DETECT,
@@ -83,6 +84,7 @@ import {
 import { sha256 } from "./libs/utils";
 import { installStorageCoordinator } from "./libs/storageCoordination";
 import { isCurrentPopupDocument } from "./libs/popupDocument";
+import { injectPackagedScript } from "./libs/extensionInjection";
 import {
   localAiRequest,
   cancelLocalAiRequest,
@@ -789,6 +791,7 @@ const messageHandlers = {
   [MSG_SAVE_RULE]: (args) => saveRule(args), // 写入/保存规则
   [MSG_EDIT_RULE]: (args) => writeSiteRule(args),
   [MSG_INJECT_JS]: (args) => injectToCurrentTab(injectInlineJsBg, args), // 注入 JS 代码到前台
+  [MSG_INJECT_PACKAGED_SCRIPT]: injectPackagedScript,
   [MSG_INJECT_CSS]: (args) => injectToCurrentTab(injectInternalCss, args), // 注入 CSS 样式到前台
   [MSG_UPDATE_CSP]: (args) => updateCspRules(args), // 触发 CSP 重写规则变更
   [MSG_CONTEXT_MENUS]: (args) => addContextMenus(args), // 切换右键菜单样式

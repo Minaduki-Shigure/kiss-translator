@@ -14,6 +14,7 @@
 
 # production
 /build
+/dist
 /.local-ai-build/
 
 # misc

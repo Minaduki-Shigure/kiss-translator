@@ -9,6 +9,7 @@ import { useSetting } from "../../hooks/Setting";
 import {
   DEFAULT_API_SETTING,
   OPT_ALL_TRANS_TYPES,
+  isApiTypeSupported,
   OPT_TRANS_BUILTINAI,
   OPT_TRANS_LOCALAI,
   OPT_TRANS_SYSTEM_TTS,
@@ -150,7 +151,9 @@ export default function AddServiceMenu({ anchorEl, onClose, onSelect }) {
         {submenu?.entries.map((entry) => (
           <MenuItem
             key={entry.type || entry.label}
-            disabled={entry.missing}
+            disabled={
+              entry.missing || !isApiTypeSupported(entry.type || "Plugin")
+            }
             onClick={() => select(entry)}
             sx={{ gap: 1 }}
           >

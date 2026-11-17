@@ -152,3 +152,19 @@ test("old grant changes do not cancel background calls", async () => {
   expect(cancel).toHaveBeenCalled();
   expect(providerHostBusy()).toBe(false);
 });
+
+test("Safari cannot route a background plugin request to an unsupported host", async () => {
+  const previousClient = process.env.REACT_APP_CLIENT;
+  process.env.REACT_APP_CLIENT = "safari";
+  try {
+    await expect(
+      invokeBackgroundPlugin(instance, "translate", { items: [] }).result
+    ).rejects.toMatchObject({ code: "HOST_UNAVAILABLE" });
+    expect(invokeInstance).not.toHaveBeenCalled();
+    expect(invokeProviderPort).not.toHaveBeenCalled();
+    expect(localAiHost).not.toHaveBeenCalled();
+  } finally {
+    if (previousClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = previousClient;
+  }
+});

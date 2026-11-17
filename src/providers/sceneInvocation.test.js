@@ -9,7 +9,10 @@ jest.mock("../libs/browser", () => ({ isBg: jest.fn() }));
 jest.mock("./backgroundInvocation", () => ({
   invokeBackgroundPlugin: jest.fn(),
 }));
-jest.mock("./serviceRuntime", () => ({ invokeService: jest.fn() }));
+jest.mock("./serviceRuntime", () => ({
+  ...jest.requireActual("./serviceRuntime"),
+  invokeService: jest.fn(),
+}));
 jest.mock("./bridgeInvocation", () => ({ invokeBridgedService: jest.fn() }));
 
 beforeEach(() => {
@@ -109,3 +112,45 @@ test("an external snapshot routes by existing instance ID through the privileged
     expect.objectContaining({ timeoutMs: 100, deadlineAt: expect.any(Number) })
   );
 });
+
+// Even a legacy native name cannot authorize an externally implemented instance.
+test.each([
+  [false, { apiType: "BuiltinAI" }],
+  [true, { apiType: "LocalAI" }],
+  [
+    false,
+    { apiType: "OpenAI", provider: { implementation: { kind: "script" } } },
+  ],
+  [
+    true,
+    {
+      apiType: "OpenAI",
+      provider: { implementation: { kind: "declarative" } },
+    },
+  ],
+])(
+  "Safari rejects an unavailable scene before dispatch (background: %s, %o)",
+  async (background, api) => {
+    const previous = process.env.REACT_APP_CLIENT;
+    process.env.REACT_APP_CLIENT = "safari";
+    isBg.mockReturnValue(background);
+    try {
+      const call = invokeScene({ ...api, apiSlug: "saved" }, "dictionary", {
+        text: "private",
+      });
+      const reason = { code: "SERVICE_UNAVAILABLE" };
+      await expect(call.result).rejects.toMatchObject(reason);
+      await expect(
+        call.events[Symbol.asyncIterator]().next()
+      ).rejects.toMatchObject(reason);
+      await call.finished;
+      expect(() => call.cancel()).not.toThrow();
+      expect(invokeService).not.toHaveBeenCalled();
+      expect(invokeBackgroundPlugin).not.toHaveBeenCalled();
+      expect(invokeBridgedService).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) delete process.env.REACT_APP_CLIENT;
+      else process.env.REACT_APP_CLIENT = previous;
+    }
+  }
+);
