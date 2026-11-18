@@ -178,5 +178,5 @@ console.log(
   `Version ${config.version} (${config.buildNumber}); release ${config.releaseVersion}`
 );
 console.log(
-  "This command generates the project. Use package:safari:development to build and sign the DMG."
+  "Project generated. For Developer ID signing and notarization, follow docs/SAFARI.md; package:safari:development builds a development-signed DMG."
 );

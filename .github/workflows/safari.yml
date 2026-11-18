@@ -30,6 +30,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: node --test scripts/safari/notary-evidence.test.mjs
       - run: pnpm run test --watchAll=false --maxWorkers=2
         env:
           CI: "true"

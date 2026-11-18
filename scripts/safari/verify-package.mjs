@@ -10,15 +10,21 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const [appArgument, ...args] = process.argv.slice(2);
-assert.ok(appArgument && !appArgument.startsWith("--"), "Usage: verify-package.mjs APP --development-team TEAM --signing-certificate SHA1 [--resources DIR]");
+assert.ok(appArgument && !appArgument.startsWith("--"), "Usage: verify-package.mjs APP --development-team TEAM --signing-certificate SHA1 [--resources DIR] [--signing-type development|developer-id] [--notarization none|stapled]");
 const options = new Map();
 for (let index = 0; index < args.length; index += 2) {
   const key = args[index];
   const value = args[index + 1];
-  assert.ok(["--development-team", "--signing-certificate", "--resources"].includes(key) && !options.has(key), `Unknown or duplicate option: ${key}`);
+  assert.ok(["--development-team", "--signing-certificate", "--resources", "--signing-type", "--notarization"].includes(key) && !options.has(key), `Unknown or duplicate option: ${key}`);
   assert.ok(value && !value.startsWith("--"), `Missing value for ${key}`);
   options.set(key, value);
 }
+const signingType = options.get("--signing-type") || "development";
+assert.ok(["development", "developer-id"].includes(signingType), "Unknown signing type");
+const notarization = options.get("--notarization") || "none";
+assert.ok(["none", "stapled"].includes(notarization), "Unknown notarization requirement");
+assert.ok(notarization !== "stapled" || signingType === "developer-id", "Stapled verification requires Developer ID");
+const signingName = signingType === "developer-id" ? "Developer ID Application" : "Apple Development";
 const team = options.get("--development-team");
 const fingerprint = options.get("--signing-certificate")?.toUpperCase();
 assert.match(team || "", /^[A-Z0-9]{10}$/, "Expected a 10-character development team");
@@ -99,20 +105,30 @@ for (const [bundle, executable, bundleId] of [
     assert.doesNotMatch(result.stderr, /^Signature=adhoc$/m, "An Apple certificate signature is required");
     assert.match(result.stderr, /^CodeDirectory .*\(runtime\)/m, "Hardened runtime must be enabled");
     assert.ok(result.stderr.split("\n").includes(`TeamIdentifier=${team}`), "Signing team mismatch");
+    const cdhash = result.stderr.match(/^CDHash=([a-f0-9]+)$/m)?.[1];
+    assert.ok(cdhash, "Missing code directory hash");
+    const timestamp = result.stderr.match(/^Timestamp=(.+)$/m)?.[1];
+    if (signingType === "developer-id") assert.ok(timestamp && timestamp !== "none", "Developer ID requires an Apple secure timestamp");
     const certificateDirectory = await mkdtemp(path.join(tmpdir(), "kiss-safari-public-certificate-"));
     try {
       const prefix = path.join(certificateDirectory, "certificate-");
       execFileSync("/usr/bin/codesign", ["--display", "--arch", architecture, `--extract-certificates=${prefix}`, bundle], { stdio: ["ignore", "ignore", "pipe"] });
       // Only the public certificate is extracted. No keychain private key is read.
       const certificate = new X509Certificate(await readFile(`${prefix}0`));
-      assert.match(certificate.subject, /^CN=Apple Development:/m, "This packaging command requires an Apple Development certificate");
+      assert.ok(certificate.subject.split("\n").some((entry) => entry.startsWith(`CN=${signingName}:`)), `Expected a ${signingName} leaf certificate`);
       assert.equal(certificate.fingerprint.replaceAll(":", ""), fingerprint, "Signing certificate mismatch");
       assert.ok(Date.parse(certificate.validFrom) <= Date.now() && Date.parse(certificate.validTo) > Date.now(), "Signing certificate is not currently valid");
-      signatures.push({ bundleId, architecture, team, certificateSHA1: fingerprint, certificateExpires: certificate.validTo });
+      signatures.push({ bundleId, architecture, cdhash, team, certificateSHA1: fingerprint, certificateExpires: certificate.validTo, ...(timestamp ? { secureTimestamp: timestamp } : {}) });
     } finally {
       await rm(certificateDirectory, { recursive: true, force: true });
     }
   }
 }
 execFileSync("/usr/bin/codesign", ["--verify", "--deep", "--strict", "--all-architectures", app], { stdio: "inherit" });
-console.log(JSON.stringify({ version: manifest.version, buildNumber, resourceCount, licenseNotices: [...licenseFiles].sort(), signing: "Apple Development", notarized: false, signatures, resourcesSHA256: hashes }, null, 2));
+if (notarization === "stapled") {
+  execFileSync("/usr/bin/xcrun", ["stapler", "validate", app], { stdio: ["ignore", "ignore", "pipe"] });
+  const assessment = spawnSync("/usr/sbin/spctl", ["--assess", "--type", "execute", "--verbose=2", app], { encoding: "utf8" });
+  assert.equal(assessment.status, 0, assessment.stderr);
+  assert.match(assessment.stderr, /^source=Notarized Developer ID$/m, "Gatekeeper must recognize notarized Developer ID");
+}
+console.log(JSON.stringify({ version: manifest.version, buildNumber, resourceCount, licenseNotices: [...licenseFiles].sort(), signing: signingName, notarized: notarization === "stapled", signatures, resourcesSHA256: hashes }, null, 2));

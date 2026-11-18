@@ -4,11 +4,11 @@
 
 ## 安装
 
-使用 `dist/Kiss-Translator-<releaseVersion>-macOS-universal-development-signed.dmg`，将 App 拖入应用程序后推出映像，再打开 App 并进入 Safari 扩展设置。详细步骤见 [安装说明](../scripts/safari/INSTALL.zh-CN.md)。
+使用 Releases 中的 `Kiss-Translator-<releaseVersion>-macOS-universal-DeveloperID.dmg`，将 App 拖入应用程序后推出映像，再打开 App 并进入 Safari 扩展设置。详细步骤见 [公证版安装说明](../scripts/safari/INSTALL-developer-id.zh-CN.md)。
 
-当前包使用 **Apple Development** 证书为容器和扩展签名，支持 Apple Silicon 与 Intel。它不是 Developer ID 签名且经 Apple 公证的公开分发包。证书、网站访问授权和翻译接口配置均以自己的账户与设备为准；源码及安装包不含翻译 API 密钥。
+从 **2.2.5-safari.2** 起，使用 Minaduki Technologies LLC 的 **Developer ID Application** 证书签名，支持 Apple Silicon 与 Intel。App 和 DMG 分别通过 Apple 公证并装订票据。首次从个人开发签名团队切换时，请先导出配置；跨团队的配置和网站授权自动继承尚未经用户资料实测，升级后核对并按需导入。
 
-建议使用 Safari 18.4 或更新版本；2.2.5 的构建环境为 macOS 15.8.2、已安装 Safari 27.2、Xcode 26.3。原生容器部署目标为 macOS 13，尚未对所有旧系统组合做实机测试。iOS 不包含在此包中。
+Developer ID 公证的站外 Safari Web Extension 需要 **Safari 18.4 或更新版本**。2.2.5 的构建环境为 macOS 15.8.2、已安装 Safari 27.2、Xcode 26.3。原生容器部署目标为 macOS 13，尚未对所有旧系统组合做实机测试。[Apple 分发说明](https://developer.apple.com/documentation/safariservices/distributing-your-safari-web-extension) · [Safari 18.4 发布说明](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/)
 
 ## 平台适配
 
@@ -41,7 +41,21 @@ pnpm build:safari
 
 发布元数据集中在 `safari.config.json`：`version` 与 package.json / manifest 一致，`buildNumber` 每次发布递增，`releaseVersion` 区分本 fork 的 Safari 修订。不要修改已交付版本的同名 DMG。
 
-从 `security find-identity -v -p codesigning` 选择自己的 Apple Development 证书，将团队 ID 与证书 SHA-1 指纹作为参数传入：
+从 `security find-identity -v -p codesigning` 选择自己的 Developer ID Application 证书。公证凭据用 `notarytool store-credentials` 保存在钥匙串，后续仅引用 profile 名称。团队 ID、证书 SHA-1 指纹和 profile 名称通过参数传入。
+
+```sh
+bash scripts/safari/package-developer-id.sh "$TEAM_ID" "$CERT_SHA1" "$NOTARY_PROFILE" prepare
+bash scripts/safari/package-developer-id.sh "$TEAM_ID" "$CERT_SHA1" "$NOTARY_PROFILE" submit-app
+bash scripts/safari/package-developer-id.sh "$TEAM_ID" "$CERT_SHA1" "$NOTARY_PROFILE" status
+bash scripts/safari/package-developer-id.sh "$TEAM_ID" "$CERT_SHA1" "$NOTARY_PROFILE" finish-app
+bash scripts/safari/package-developer-id.sh "$TEAM_ID" "$CERT_SHA1" "$NOTARY_PROFILE" submit-dmg
+bash scripts/safari/package-developer-id.sh "$TEAM_ID" "$CERT_SHA1" "$NOTARY_PROFILE" status
+bash scripts/safari/package-developer-id.sh "$TEAM_ID" "$CERT_SHA1" "$NOTARY_PROFILE" finish
+```
+
+`prepare` 使用先前 `build:safari` 生成的工程签名，后续步骤通过 `build/safari-developer-id/<releaseVersion>` 的记录恢复。`status` 显示本地记录。`finish-app` 和 `finish` 各查询一次 Apple，审核中返回 75，稍后重跑同一步会查询原 UUID；Accepted 后自动继续。App 票据装订完成后，DMG 使用这份已公证 App。最终步骤核对 DMG 内签名、资源、票据、Gatekeeper，并计算装订后的 SHA-256。构建记录和未完成的公证输入保留用于恢复。
+
+个人开发签名仍可使用原来的入口，说明见 [开发版安装说明](../scripts/safari/INSTALL.zh-CN.md)。
 
 ```sh
 bash scripts/safari/package-development.sh "$TEAM_ID" "$CERT_SHA1" --skip-build
@@ -53,7 +67,7 @@ bash scripts/safari/package-development.sh "$TEAM_ID" "$CERT_SHA1" --skip-build
 
 ## 验证
 
-本次版本说明见 [2.2.5-safari.1](releases/2.2.5-safari.1.md)；首版记录见 [2.1.0-safari.1](SAFARI-2.1.0-safari.1.md)。
+本次版本说明见 [2.2.5-safari.2](releases/2.2.5-safari.2.md)；上一版记录见 [2.2.5-safari.1](releases/2.2.5-safari.1.md)。
 
 ```sh
 CI=true pnpm run test --watchAll=false --maxWorkers=2
