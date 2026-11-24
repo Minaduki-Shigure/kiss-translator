@@ -24,6 +24,11 @@ const instance = (id, origins = [A], overrides = {}) => ({
 });
 const domains = (rules) => rules.map((r) => r.action.requestHeaders[0].value);
 
+const restoreClient = (previous) => {
+  if (previous === undefined) delete process.env.REACT_APP_CLIENT;
+  else process.env.REACT_APP_CLIENT = previous;
+};
+
 function fixture(setting, initial = []) {
   let current = setting;
   let rules = initial;
@@ -276,4 +281,81 @@ test("wildcard rewrite origins remain forbidden even if the network list contain
       []
     )
   ).toThrow();
+});
+
+test.each(["chrome", "edge", "firefox"])(
+  "%s keeps Origin declarations from supported imported plugins",
+  async (client) => {
+    const previousClient = process.env.REACT_APP_CLIENT;
+    process.env.REACT_APP_CLIENT = client;
+    try {
+      const plugin = instance("imported", [B], { apiType: "Plugin" });
+      const f = fixture({ orilist: A, transApis: [plugin] });
+      await f.manager.refresh();
+      expect(domains(f.rules())).toEqual([A, B]);
+      await expect(f.manager.ensure(plugin)).resolves.toBeUndefined();
+    } finally {
+      restoreClient(previousClient);
+    }
+  }
+);
+
+describe("Safari imported plugin Origin rules", () => {
+  let previousClient;
+  beforeEach(() => {
+    previousClient = process.env.REACT_APP_CLIENT;
+    process.env.REACT_APP_CLIENT = "safari";
+  });
+  afterEach(() => restoreClient(previousClient));
+
+  test.each(["script", "declarative"])(
+    "an unavailable %s plugin creates no rules and preserves its imported configuration",
+    async (kind) => {
+      const plugin = instance("imported", [B], { apiType: "Plugin" });
+      plugin.provider.implementation.kind = kind;
+      const setting = { transApis: [plugin] };
+      const before = JSON.stringify(setting);
+      const f = fixture(setting);
+
+      await f.manager.refresh();
+
+      expect(collectPluginOriginEntries(setting.transApis)).toEqual([]);
+      expect(f.dnr.updateDynamicRules).not.toHaveBeenCalled();
+      expect(JSON.stringify(setting)).toBe(before);
+      await expect(f.manager.ensure(plugin)).rejects.toMatchObject({
+        code: "SERVICE_UNAVAILABLE",
+      });
+    }
+  );
+
+  test("startup removes stale plugin rules while retaining manual Origin patterns and unrelated rules", async () => {
+    const setting = {
+      orilist: `${A},a.example/path`,
+      transApis: [instance("imported", [A, B], { apiType: "Plugin" })],
+    };
+    const stale = buildOriginRules(setting, "extension-id", [{ origin: B }]);
+    const csp = {
+      id: 1,
+      action: { type: "modifyHeaders", responseHeaders: [] },
+    };
+    const unrelated = { id: 25000, action: { type: "block" } };
+    const f = fixture(setting, [csp, unrelated, ...stale]);
+
+    await f.manager.refresh();
+
+    expect(f.rules()).toContain(csp);
+    expect(f.rules()).toContain(unrelated);
+    const originRules = f
+      .rules()
+      .filter((rule) => rule.id >= 10000 && rule.id < 20000);
+    expect(domains(originRules)).toEqual([A, "a.example/path"]);
+    expect(originRules.map((rule) => rule.condition.urlFilter)).toEqual([
+      A,
+      "a.example/path",
+    ]);
+    expect(f.dnr.updateDynamicRules).toHaveBeenCalledWith({
+      removeRuleIds: stale.map((rule) => rule.id),
+      addRules: originRules,
+    });
+  });
 });

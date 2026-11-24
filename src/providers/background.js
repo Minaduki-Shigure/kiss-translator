@@ -81,13 +81,6 @@ export function installProviderRelay() {
         const instance = setting.transApis.find(
           (api) => api.apiSlug === message.serviceId && !api.isDisabled
         );
-        if (instance?.provider?.permissions?.originRewrite?.length) {
-          const { ensurePluginOriginRules } = await import(
-            "./originRulesBackground"
-          );
-          await ensurePluginOriginRules(instance);
-          if (disconnected) return;
-        }
         const systemSpeech =
           instance?.apiType === OPT_TRANS_SYSTEM_TTS &&
           (!instance.provider ||
@@ -109,6 +102,12 @@ export function installProviderRelay() {
             instance.provider.implementation.kind === "native")
         )
           throw new Error("Plugin service is unavailable.");
+        if (instance?.provider?.permissions?.originRewrite?.length) {
+          const { ensurePluginOriginRules } = await import(
+            "./originRulesBackground"
+          );
+          await ensurePluginOriginRules(instance);
+        }
         if (disconnected) return;
         active.set(client, {
           serviceId: instance.apiSlug,

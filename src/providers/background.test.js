@@ -5,6 +5,7 @@ import { serveProviderPort } from "./host";
 import { STOKEY_SETTING } from "../config/storage";
 import { providerHostBusy } from "./hostLease";
 import { localAiHost } from "../libs/localAiBackground";
+import { ensurePluginOriginRules } from "./originRulesBackground";
 jest.mock("webextension-polyfill", () => ({
   runtime: { onConnect: { addListener: jest.fn() } },
   storage: { onChanged: { addListener: jest.fn() } },
@@ -16,6 +17,9 @@ jest.mock("./bridge", () => ({
   PROVIDER_HOST_PORT: "host",
 }));
 jest.mock("./host", () => ({ serveProviderPort: jest.fn() }));
+jest.mock("./originRulesBackground", () => ({
+  ensurePluginOriginRules: jest.fn().mockResolvedValue(undefined),
+}));
 
 const flush = async () => {
   for (let i = 0; i < 15; i++) await Promise.resolve();
@@ -325,29 +329,88 @@ test("legacy grant removals do not cancel active services", async () => {
   pages.forEach((page) => expect(page.disconnect).toHaveBeenCalledTimes(1));
 });
 
-test("Safari rejects plugin ports before starting a scripting or offscreen host", async () => {
-  const previousClient = process.env.REACT_APP_CLIENT;
-  process.env.REACT_APP_CLIENT = "safari";
-  try {
-    const relay = setup(),
-      page = client();
-    relay.connect(page);
-    page.onMessage.emit({
-      type: "start",
-      serviceId: "one",
-      capability: "translate",
-    });
-    await flush();
-    expect(page.postMessage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        type: "error",
-        error: expect.objectContaining({ code: "HOST_UNAVAILABLE" }),
-      })
-    );
-    expect(localAiHost).not.toHaveBeenCalled();
-    expect(serveProviderPort).not.toHaveBeenCalled();
-  } finally {
-    if (previousClient === undefined) delete process.env.REACT_APP_CLIENT;
-    else process.env.REACT_APP_CLIENT = previousClient;
+test.each(["chrome", "firefox"])(
+  "%s waits for imported plugin Origin rules before starting the host",
+  async (platform) => {
+    const previousClient = process.env.REACT_APP_CLIENT;
+    const previousChrome = global.chrome;
+    process.env.REACT_APP_CLIENT = platform;
+    global.chrome = {};
+    try {
+      const relay = setup(),
+        page = client();
+      const instance = {
+        apiSlug: "one",
+        apiType: "Plugin",
+        provider: {
+          implementation: { kind: "script" },
+          permissions: { originRewrite: ["https://api.example"] },
+        },
+      };
+      getSettingWithDefault.mockResolvedValue({ transApis: [instance] });
+      let complete;
+      ensurePluginOriginRules.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          })
+      );
+      relay.connect(page);
+      page.onMessage.emit({ type: "start", serviceId: "one" });
+      await flush();
+      expect(ensurePluginOriginRules).toHaveBeenCalledWith(instance);
+      expect(serveProviderPort).not.toHaveBeenCalled();
+      complete();
+      await flush();
+      expect(serveProviderPort).toHaveBeenCalledTimes(1);
+      page.onDisconnect.emit();
+    } finally {
+      global.chrome = previousChrome;
+      if (previousClient === undefined) delete process.env.REACT_APP_CLIENT;
+      else process.env.REACT_APP_CLIENT = previousClient;
+    }
   }
-});
+);
+
+test.each(["script", "declarative"])(
+  "Safari rejects %s plugin ports before Origin side effects or host startup",
+  async (kind) => {
+    const previousClient = process.env.REACT_APP_CLIENT;
+    process.env.REACT_APP_CLIENT = "safari";
+    try {
+      const relay = setup(),
+        page = client();
+      getSettingWithDefault.mockResolvedValue({
+        transApis: [
+          {
+            apiSlug: "one",
+            apiType: "Plugin",
+            provider: {
+              implementation: { kind },
+              permissions: { originRewrite: ["https://api.example"] },
+            },
+          },
+        ],
+      });
+      relay.connect(page);
+      page.onMessage.emit({
+        type: "start",
+        serviceId: "one",
+        capability: "translate",
+      });
+      await flush();
+      expect(page.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "error",
+          error: expect.objectContaining({ code: "HOST_UNAVAILABLE" }),
+        })
+      );
+      expect(localAiHost).not.toHaveBeenCalled();
+      expect(serveProviderPort).not.toHaveBeenCalled();
+      expect(ensurePluginOriginRules).not.toHaveBeenCalled();
+    } finally {
+      if (previousClient === undefined) delete process.env.REACT_APP_CLIENT;
+      else process.env.REACT_APP_CLIENT = previousClient;
+    }
+  }
+);

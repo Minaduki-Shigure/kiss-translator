@@ -1,6 +1,7 @@
 import { providerError, supportsProviderCapability } from "./capabilities";
 import { assertPluginCompatibility } from "./compatibility";
 import { validatePermissions, validateServiceConfig } from "./instances";
+import { isApiTypeSupported } from "../config/platformApiSupport";
 
 export const ORIGIN_RULE_START_ID = 10000;
 const ORIGIN_RULE_END_ID = 19999;
@@ -35,6 +36,7 @@ export function collectPluginOriginEntries(apis = []) {
       typeof api.apiSlug !== "string" ||
       !api.apiSlug ||
       api.isDisabled ||
+      !isApiTypeSupported(api) ||
       !["script", "declarative"].includes(provider.implementation?.kind) ||
       !provider.permissions?.originRewrite?.length
     )
