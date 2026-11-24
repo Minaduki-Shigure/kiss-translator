@@ -8,7 +8,7 @@
 
 从 **2.2.5-safari.2** 起，使用 Minaduki Technologies LLC 的 **Developer ID Application** 证书签名，支持 Apple Silicon 与 Intel。App 和 DMG 分别通过 Apple 公证并装订票据。首次从个人开发签名团队切换时，请先导出配置；跨团队的配置和网站授权自动继承尚未经用户资料实测，升级后核对并按需导入。
 
-Developer ID 公证的站外 Safari Web Extension 需要 **Safari 18.4 或更新版本**。2.2.5 的构建环境为 macOS 15.8.2、已安装 Safari 27.2、Xcode 26.3。原生容器部署目标为 macOS 13，尚未对所有旧系统组合做实机测试。[Apple 分发说明](https://developer.apple.com/documentation/safariservices/distributing-your-safari-web-extension) · [Safari 18.4 发布说明](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/)
+Developer ID 公证的站外 Safari Web Extension 需要 **Safari 18.4 或更新版本**。2.2.7 的构建环境为 macOS 15.8.2、已安装 Safari 27.2、Xcode 26.3。原生容器部署目标为 macOS 13，尚未对所有旧系统组合做实机测试。[Apple 分发说明](https://developer.apple.com/documentation/safariservices/distributing-your-safari-web-extension) · [Safari 18.4 发布说明](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/)
 
 ## 平台适配
 
@@ -67,7 +67,7 @@ bash scripts/safari/package-development.sh "$TEAM_ID" "$CERT_SHA1" --skip-build
 
 ## 验证
 
-本次版本说明见 [2.2.5-safari.2](releases/2.2.5-safari.2.md)；上一版记录见 [2.2.5-safari.1](releases/2.2.5-safari.1.md)。
+本次版本说明见 [2.2.7-safari.1](releases/2.2.7-safari.1.md)；上一版记录见 [2.2.5-safari.2](releases/2.2.5-safari.2.md)。
 
 ```sh
 CI=true pnpm run test --watchAll=false --maxWorkers=2
