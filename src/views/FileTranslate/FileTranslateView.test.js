@@ -295,7 +295,7 @@ describe("FileTranslatePage (M2 UI)", () => {
       try {
         await act(async () => root.render(<FileTranslatePage />));
         expect(container.textContent).toContain(
-          "本地翻译模型：本地模型未下载或下载不完整"
+          "hy-mt2-1.8b：本地模型未下载或下载不完整"
         );
         const button = [...container.querySelectorAll("button")].find(
           (item) => item.textContent === "下载模型"

@@ -156,7 +156,7 @@ describe("ImageTranslate Options Page", () => {
       );
     };
     mountOptions("");
-    expect(select().textContent).toBe("不使用布局服务 (整图识别)");
+    expect(select().textContent).toBe("不调用独立界面分析服务");
     expect(control().querySelector("label").getAttribute("data-shrink")).toBe(
       "true"
     );
@@ -170,10 +170,10 @@ describe("ImageTranslate Options Page", () => {
       },
     });
     mountOptions("");
-    expect(select().textContent).toBe("不使用布局服务 (整图识别)");
+    expect(select().textContent).toBe("不调用独立界面分析服务");
     act(() => root.render(null));
     mountOptions("");
-    expect(select().textContent).toBe("不使用布局服务 (整图识别)");
+    expect(select().textContent).toBe("不调用独立界面分析服务");
     choose("LocalAI-Layout");
     expect(
       mockUpdateSetting.mock.calls.slice(-1)[0][0](mockSetting)

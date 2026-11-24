@@ -11,7 +11,10 @@ jest.mock("../../hooks/ProviderPackages", () => ({
   useProviderPackages: () => ({ packages: [mockPack] }),
 }));
 jest.mock("../../hooks/Setting", () => ({
-  useSetting: () => ({ reloadSetting: mockReload }),
+  useSetting: () => ({
+    setting: { uiLang: "zh" },
+    reloadSetting: mockReload,
+  }),
 }));
 jest.mock("../../hooks/I18n", () => ({
   useI18n: () => require("../../config/i18n").newI18n("zh"),

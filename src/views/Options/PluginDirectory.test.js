@@ -19,6 +19,12 @@ jest.mock("../../providers/pluginDirectory", () => ({
   loadCommunityPluginMetadata: jest.fn(),
   readDirectoryCache: jest.fn(),
 }));
+jest.mock(
+  "react-markdown",
+  () =>
+    ({ children }) =>
+      children
+);
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 let root, container;
 let mockLanguage;
