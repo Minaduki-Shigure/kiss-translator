@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
-import { API_SPE_TYPES } from "../config";
+import {
+  API_SPE_TYPES,
+  CLIENT_SAFARI,
+  isApiAvailableFor,
+  isApiTypeSupported,
+} from "../config";
 
 /**
  * Label 组件 - 单行文本溢出省略包装标签
@@ -482,7 +487,14 @@ export function Menus({
 
   // 过滤并计算出当前所有未禁用的翻译 API 列表，用于 UI 下拉列表展示
   const enabledApis = useMemo(
-    () => (transApis || []).filter((api) => !api.isDisabled),
+    () =>
+      (transApis || []).filter(
+        (api) =>
+          !api.isDisabled &&
+          isApiTypeSupported(api.apiType) &&
+          (process.env.REACT_APP_CLIENT !== CLIENT_SAFARI ||
+            isApiAvailableFor(api, "translate"))
+      ),
     [transApis]
   );
 

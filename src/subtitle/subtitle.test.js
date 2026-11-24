@@ -3,6 +3,7 @@ import { saveEdit } from "../libs/storage.js";
 import { logger } from "../libs/log.js";
 import { STOKEY_SETTING } from "../config/storage.js";
 import { YouTubeInitializer } from "./YouTubeCaptionProvider.js";
+import { injectJs } from "../injectors/index.js";
 
 jest.mock("../libs/storage.js", () => ({
   saveEdit: jest.fn(),
@@ -105,9 +106,53 @@ describe("persistSubtitlePosition", () => {
 });
 
 describe("runSubtitle", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
+
+  afterEach(() => {
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
+  });
+
+  test.each([
+    "https://example.test/?site=https://www.youtube.com",
+    "https://www.youtube.com.example.test/watch?v=test",
+    "http://www.youtube.com/watch?v=test",
+  ])(
+    "does not install the page bridge outside the exact YouTube origin: %s",
+    (href) => {
+      runSubtitle({
+        href,
+        setting: {
+          subtitleSetting: { enabled: true, apiSlug: "local" },
+          transApis: [],
+        },
+      });
+      expect(injectJs).not.toHaveBeenCalled();
+      expect(YouTubeInitializer).not.toHaveBeenCalled();
+    }
+  );
+
+  test.each(["BuiltinAI", "LocalAI"])(
+    "stops instead of sending subtitles to another provider when Safari cannot use %s",
+    (apiType) => {
+      process.env.REACT_APP_CLIENT = "safari";
+      const setting = {
+        subtitleSetting: { enabled: true, apiSlug: "saved-local" },
+        transApis: [
+          { apiSlug: "cloud", apiType: "Microsoft" },
+          { apiSlug: "saved-local", apiType },
+        ],
+      };
+      runSubtitle({ href: "https://www.youtube.com/watch?v=video-1", setting });
+      expect(YouTubeInitializer).not.toHaveBeenCalled();
+      expect(setting.subtitleSetting.apiSlug).toBe("saved-local");
+      expect(saveEdit).not.toHaveBeenCalled();
+    }
+  );
 
   test.each(["disabled-api", "missing-api"])(
     "does not fall back when the selected service %s is unavailable",

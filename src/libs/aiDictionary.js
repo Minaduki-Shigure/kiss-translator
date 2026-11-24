@@ -8,6 +8,7 @@ import {
   isApiConfigured,
   supportsApiCapability,
 } from "../config/serviceSelection";
+import { isApiTypeSupported } from "../config/platformApiSupport";
 import { withDefaultPromptInput } from "../providers/defaultPrompts";
 const hasPrompt = (value) => typeof value === "string" && Boolean(value.trim());
 
@@ -27,6 +28,7 @@ export function resolveAiDictApiSetting({
     (api) =>
       api.apiSlug === aiDictApiSlug &&
       !api.isDisabled &&
+      isApiTypeSupported(api) &&
       isApiConfigured(api) &&
       supportsApiCapability(api, "dictionary")
   );

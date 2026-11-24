@@ -12,6 +12,28 @@ describe("translation service selection", () => {
     { apiType: "Google", apiSlug: "tied", sortOrder: 0 },
   ];
 
+  test.each(["BuiltinAI", "LocalAI", "Plugin"])(
+    "keeps an explicit Safari %s selection instead of routing its text remotely",
+    (apiType) => {
+      const previous = process.env.REACT_APP_CLIENT;
+      process.env.REACT_APP_CLIENT = "safari";
+      try {
+        const selected = { apiSlug: "my-service", apiType, isDisabled: true };
+        const services = [apis[2], selected];
+        const rule = { apiSlug: selected.apiSlug };
+        expect(resolveApiSelection(services, rule.apiSlug)).toBe(selected);
+        expect(normalizeRuleApi(rule, services)).toBe(rule);
+        expect(
+          getEnabledApis([apis[2], { ...selected, isDisabled: false }])
+        ).toEqual([apis[2]]);
+        expect(resolveApiSelection(services, "ordinary-deleted")).toBe(apis[2]);
+      } finally {
+        if (previous === undefined) delete process.env.REACT_APP_CLIENT;
+        else process.env.REACT_APP_CLIENT = previous;
+      }
+    }
+  );
+
   test("uses the popup display order and keeps ties stable without mutation", () => {
     expect(getEnabledApis(apis).map((api) => api.apiSlug)).toEqual([
       "first",

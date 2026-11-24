@@ -1,3 +1,5 @@
+import { isApiTypeSupported } from "../config/platformApiSupport";
+import { providerError } from "./capabilities";
 import { serviceInvocationOptions } from "./timeout";
 import { invokeInstance } from "./runtime";
 import { createInvocation } from "./invocation";
@@ -5,8 +7,24 @@ import { createAssetStore } from "./transport";
 import { invokeBridgedService } from "./bridgeInvocation";
 import { OPT_TRANS_SYSTEM_TTS } from "../config/api";
 
+// Return the normal task contract even when a saved provider cannot run here.
+export function unavailableServiceInvocation(instance, options = {}) {
+  const assets = options.assets || createAssetStore();
+  return {
+    ...createInvocation(() => {
+      throw providerError(
+        "SERVICE_UNAVAILABLE",
+        `${instance?.apiType || "This service"} is unavailable in Safari. Choose another service.`
+      );
+    }, options),
+    assets,
+  };
+}
+
 /** Frontend dispatch keeps legacy native page dependencies out of the user-script Offscreen host. */
 export function invokeService(instance, capability, input, options = {}) {
+  if (!isApiTypeSupported(instance))
+    return unavailableServiceInvocation(instance, options);
   options = serviceInvocationOptions(instance, options);
   // Chrome TTS stop is browser-global. Background owns all utterances so a stale
   // page cancellation cannot stop a different page's newer speech task.

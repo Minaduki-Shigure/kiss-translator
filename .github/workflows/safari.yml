@@ -1,0 +1,42 @@
+name: Safari compatibility
+
+on:
+  push:
+    branches: ["safari/**"]
+  pull_request:
+    branches: ["safari/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web-extension:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check Safari's recorded upstream baseline
+        run: |
+          baseline=$(node -p 'require("./safari.config.json").upstream.commit')
+          node -e 'const c = require("./safari.config.json"); const p = require("./package.json"); if (c.version !== p.version || c.upstream.tag !== "v" + p.version || !/^[a-f0-9]{40}$/.test(c.upstream.commit)) process.exit(1)'
+          git merge-base --is-ancestor "$baseline" HEAD
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.14.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: node --test scripts/safari/notary-evidence.test.mjs
+      - run: pnpm run test --watchAll=false --maxWorkers=2
+        env:
+          CI: "true"
+      - run: pnpm build:safari-output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safari-web-extension-unsigned
+          path: build/safari
+          retention-days: 14

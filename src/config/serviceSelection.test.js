@@ -11,6 +11,7 @@ import { createBuiltinInstance } from "../builtin-plugins";
 
 test.each([
   ["chrome", true],
+  ["safari", false],
   ["edge", true],
   ["firefox", true],
   ["web", false],

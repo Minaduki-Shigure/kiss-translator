@@ -1,5 +1,7 @@
 # KISS Translator 简约翻译
 
+> **macOS Safari 版：** 从[本 fork 的 Releases](https://github.com/Minaduki-Shigure/kiss-translator/releases) 下载 Developer ID 签名并经 Apple 公证的 DMG。升级前请导出配置，首次从开发签名版切换时核对设置与网站授权。安装方法、功能范围与上游同步步骤见 [Safari 维护说明](docs/SAFARI.md)。
+
 [English](README.en.md) | [中文](README.md) | [日本語](README.ja.md) | [한국어](README.ko.md)
 
 [![GitHub Release](https://img.shields.io/github/v/release/fishjar/kiss-translator?color=blue)](https://github.com/fishjar/kiss-translator/releases)

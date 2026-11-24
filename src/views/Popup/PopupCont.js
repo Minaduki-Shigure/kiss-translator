@@ -1,4 +1,5 @@
 import { supportsTouch } from "../../libs/touchCapability";
+import Alert from "@mui/material/Alert";
 import TouchTranslateControl from "../../components/TouchTranslateControl";
 import {
   useCallback,
@@ -44,6 +45,8 @@ import {
   MSG_TOUCH_TRANSLATE_STATE,
   OPT_LANGS_FROM_REVERSED as OPT_LANGS_FROM,
   OPT_LANGS_TO_REVERSED as OPT_LANGS_TO,
+  isApiTypeSupported,
+  OPT_TRANS_BUILTINAI,
 } from "../../config";
 import { saveRule } from "../../libs/rules";
 import { getRulesWithDefault } from "../../libs/storage";
@@ -691,17 +694,23 @@ export default function PopupCont({
   }, [configuredApis]);
   const services = useMemo(
     () =>
-      getEnabledApis(configuredApis).map((api) => ({
-        key: api.apiSlug,
-        type: api.apiType || api.apiSlug,
-        name: api.apiName || api.apiSlug,
-      })),
+      getEnabledApis(configuredApis)
+        .filter((api) => isApiTypeSupported(api))
+        .map((api) => ({
+          key: api.apiSlug,
+          type: api.apiType || api.apiSlug,
+          name: api.apiName || api.apiSlug,
+        })),
     [configuredApis]
   );
   const { transOpen, apiSlug, fromLang, toLang, textStyle, transOnly } =
     rule || {};
+  const unavailableApiSelected = configuredApis.find(
+    (api) => api.apiSlug === apiSlug && !isApiTypeSupported(api)
+  );
   useEffect(() => {
-    if (!isVisible) return;
+    // Never replace an explicitly selected local-only service with a network service.
+    if (!isVisible || unavailableApiSelected) return;
     const resolved = resolveApiSelection(configuredApis, apiSlug);
     if (!resolved || resolved.apiSlug === apiSlug) return;
     const attempt = JSON.stringify([
@@ -722,6 +731,7 @@ export default function PopupCont({
   }, [
     configuredApis,
     apiSlug,
+    unavailableApiSelected,
     isVisible,
     isDisabledPage,
     canTranslatePage,
@@ -733,8 +743,12 @@ export default function PopupCont({
   ]);
   const hasEnabledServices = services.length > 0;
   const translationEnabled =
-    canTranslatePage && hasEnabledServices && enabledValue(transOpen);
-  const translationUnavailable = !hasEnabledServices && !isInCurrentBlacklist;
+    canTranslatePage &&
+    hasEnabledServices &&
+    !unavailableApiSelected &&
+    enabledValue(transOpen);
+  const translationUnavailable =
+    (!hasEnabledServices || unavailableApiSelected) && !isInCurrentBlacklist;
   const translationInProgress =
     hasEnabledServices && (translationTogglePending || translationBusy);
   useEffect(() => {
@@ -835,6 +849,15 @@ export default function PopupCont({
 
   return (
     <section className="kt-popup-content">
+      {unavailableApiSelected && (
+        <Alert severity="info">
+          {i18n(
+            unavailableApiSelected.apiType === OPT_TRANS_BUILTINAI
+              ? "safari_builtin_ai_hint"
+              : "service_configured_unavailable"
+          )}
+        </Alert>
+      )}
       <div
         className={`kt-popup-hero${translationEnabled ? " kt-popup-hero--translated" : ""}${isInCurrentBlacklist ? " kt-popup-hero--blocked" : ""}${translationBusy && hasEnabledServices ? " kt-popup-hero--busy" : ""}${translationUnavailable ? " kt-popup-hero--no-service" : ""}`}
         aria-busy={translationInProgress}
@@ -920,9 +943,15 @@ export default function PopupCont({
                     "{domain}",
                     restorePattern || selectedDomain
                   )
-                : translationUnavailable
-                  ? i18n("popup_no_services")
-                  : `${actionLabel}${pageShortcut ? ` (${pageShortcut})` : ""}`
+                : unavailableApiSelected
+                  ? i18n(
+                      unavailableApiSelected.apiType === OPT_TRANS_BUILTINAI
+                        ? "safari_builtin_ai_hint"
+                        : "service_configured_unavailable"
+                    )
+                  : translationUnavailable
+                    ? i18n("popup_no_services")
+                    : `${actionLabel}${pageShortcut ? ` (${pageShortcut})` : ""}`
             }
             disabled={
               (!canTranslatePage && !isInCurrentBlacklist) ||

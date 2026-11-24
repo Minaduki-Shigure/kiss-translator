@@ -43,10 +43,14 @@ jest.mock("../../hooks/Alert", () => ({
 
 jest.mock("../../hooks/Setting", () => ({ useSetting: jest.fn() }));
 let mockIsExt = true;
+let mockIsSafari = false;
 jest.mock("../../libs/client", () => ({
   isAutoTranslateClipboardSupported: true,
   get isExt() {
     return mockIsExt;
+  },
+  get isSafari() {
+    return mockIsSafari;
   },
 }));
 jest.mock("../../libs/clipboard", () => ({
@@ -163,6 +167,65 @@ describe("Settings overview layout", () => {
       ).not.toContain("Disabled detector");
     } finally {
       act(() => root.unmount());
+    }
+  });
+  test("Safari preserves an unavailable saved detector without offering an external provider as an enabled choice", async () => {
+    const previous = process.env.REACT_APP_CLIENT;
+    process.env.REACT_APP_CLIENT = "safari";
+    browser.commands.getAll.mockResolvedValue([]);
+    useAlert.mockReturnValue(alert);
+    const updateSetting = jest.fn();
+    useSetting.mockReturnValue({
+      setting: {
+        uiLang: "zh",
+        logLevel: 3,
+        clearCache: false,
+        langDetector: "saved-detector",
+        transApis: [
+          {
+            apiSlug: "saved-detector",
+            apiType: "Google",
+            apiName: "External detector",
+            provider: {
+              apiVersion: 1,
+              implementation: { kind: "script" },
+              capabilities: { detectLanguage: { handler: "detectLanguage" } },
+            },
+          },
+          {
+            apiSlug: "available-detector",
+            apiType: "Google",
+            apiName: "Native detector",
+          },
+        ],
+      },
+      updateSetting,
+    });
+    useFab.mockReturnValue({ fab: {}, updateFab: jest.fn() });
+    let view;
+    try {
+      view = await renderSettings();
+      const input = view.container.querySelector('input[name="langDetector"]');
+      expect(input.value).toBe("saved-detector");
+      const field = input.closest(".MuiFormControl-root");
+      expect(field.textContent).toContain("service_configured_unavailable");
+      act(() =>
+        field
+          .querySelector('[role="combobox"]')
+          .dispatchEvent(
+            new MouseEvent("mousedown", { bubbles: true, button: 0 })
+          )
+      );
+      const labels = [...document.querySelectorAll('[role="option"]')].map(
+        (option) => option.textContent
+      );
+      expect(labels).not.toContain("External detector");
+      expect(labels).toContain("Native detector");
+      expect(updateSetting).not.toHaveBeenCalled();
+    } finally {
+      if (view) act(() => view.root.unmount());
+      if (previous === undefined) delete process.env.REACT_APP_CLIENT;
+      else process.env.REACT_APP_CLIENT = previous;
     }
   });
   test("keeps the list-style grid free of spacing gutters", async () => {
@@ -316,6 +379,7 @@ describe("Settings backup import", () => {
 describe("ExtCommands", () => {
   beforeEach(() => {
     browser.commands.getAll.mockResolvedValue(commands);
+    mockIsSafari = false;
     browser.tabs.create.mockReset();
     alert.info.mockReset();
     useAlert.mockReturnValue(alert);
@@ -323,6 +387,22 @@ describe("ExtCommands", () => {
 
   afterEach(() => {
     setUserAgent(originalUserAgent);
+    mockIsSafari = false;
+  });
+
+  test("shows Safari shortcut-management instructions without opening Chromium settings", async () => {
+    mockIsSafari = true;
+    setUserAgent("Mozilla/5.0 Version/26.0 Safari/605.1.15");
+    const { container, root } = await renderCommands();
+    const open = jest.spyOn(window, "open");
+
+    await act(async () => container.querySelector("button").click());
+
+    expect(alert.info).toHaveBeenCalledWith("safari_shortcut_edit_hint");
+    expect(browser.tabs.create).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+    act(() => root.unmount());
   });
 
   test("shows Firefox shortcut-management instructions without opening a tab", async () => {

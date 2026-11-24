@@ -438,6 +438,53 @@ describe("Layout checkUpdate setting effect", () => {
     delete window.APP_INFO;
   });
 
+  test.each([
+    ["2.2.5-safari.10\n", true],
+    ["2.2.6-safari.1", true],
+    ["2.2.5-safari.2", false],
+    ["2.2.5-safari.1", false],
+    ["2.2.4-safari.99", false],
+    ["2.3.0", false],
+    ["2.3.0-safari.1-candidate", false],
+    ["2.3.0-safari.01", false],
+    ["2.3.0-safari.1\nhttps://example.invalid", false],
+    ["<html>Login required</html>", false],
+    [null, false],
+  ])(
+    "Safari only offers released DMGs from this fork: %p",
+    async (remote, showsAlert) => {
+      mockCheckUpdate = true;
+      mockIsGm = false;
+      process.env.REACT_APP_CLIENT = "safari";
+      process.env.REACT_APP_VERSION = "2.2.5";
+      process.env.REACT_APP_SAFARI_RELEASE_VERSION = "2.2.5-safari.2";
+      const releaseBase =
+        "https://github.com/Minaduki-Shigure/kiss-translator/releases";
+      global.fetch.mockResolvedValue({
+        ok: remote !== null,
+        status: remote === null ? 404 : 200,
+        text: async () => remote,
+      });
+      const container = document.createElement("div");
+      const root = createRoot(container);
+      try {
+        await act(async () => root.render(<Layout />));
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(global.fetch.mock.calls[0][0].split("?")[0]).toBe(
+          releaseBase + "/latest/download/safari-version.txt"
+        );
+        const alert = container.querySelector(".kt-options-version-alert");
+        expect(Boolean(alert)).toBe(showsAlert);
+        if (alert)
+          expect(
+            [...alert.querySelectorAll("a")].map((link) => link.href)
+          ).toEqual([releaseBase + "/tag/safari-" + remote.trim()]);
+      } finally {
+        act(() => root.unmount());
+      }
+    }
+  );
+
   test("does not fetch latest version when checkUpdate is false", async () => {
     mockCheckUpdate = false;
     const container = document.createElement("div");

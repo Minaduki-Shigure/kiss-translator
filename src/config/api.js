@@ -1,3 +1,4 @@
+import { isApiTypeSupported } from "./platformApiSupport";
 import { normalizeApiThinkingSetting } from "../builtin-plugins/thinkingCapabilities";
 import {
   DEFAULT_HTTP_TIMEOUT,
@@ -25,6 +26,7 @@ import {
   DEFAULT_ENABLED_API_TYPES,
 } from "../builtin-plugins/presets";
 
+export { isApiTypeSupported } from "./platformApiSupport";
 export * from "./apiConstants";
 export * from "../providers/sdk/languageDictionary";
 export * from "../builtin-plugins/languageMappings";
@@ -449,8 +451,12 @@ export const DEFAULT_API_LIST = OPT_ALL_TRANS_TYPES.map((apiType) =>
     apiSlug: apiType,
     apiName: apiType,
     apiType,
-    isDisabled: !DEFAULT_ENABLED_API_TYPES.has(apiType),
-    sortOrder: DEFAULT_ENABLED_API_TYPES.has(apiType) ? 0 : 999,
+    isDisabled:
+      !DEFAULT_ENABLED_API_TYPES.has(apiType) || !isApiTypeSupported(apiType),
+    sortOrder:
+      DEFAULT_ENABLED_API_TYPES.has(apiType) && isApiTypeSupported(apiType)
+        ? 0
+        : 999,
   })
 );
 

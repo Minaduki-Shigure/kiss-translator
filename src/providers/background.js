@@ -10,6 +10,7 @@ import { OPT_TRANS_SYSTEM_TTS } from "../config/apiConstants";
 import { serveProviderPort } from "./host";
 import { invokeBackgroundSpeech } from "../builtin-plugins/speech-runtime";
 import { isHostedLocalAsr } from "./localAsrRouting";
+import { CLIENT_SAFARI } from "../config/client";
 
 export function installProviderRelay() {
   const active = new Map();
@@ -92,6 +93,15 @@ export function installProviderRelay() {
           (!instance.provider ||
             instance.provider.implementation.kind === "native");
         const localAsr = isHostedLocalAsr(instance, message.capability);
+        // Safari has no extension plugin scripting/offscreen host. A stale or
+        // direct extension port must not start one by bypassing scene selection.
+        if (process.env.REACT_APP_CLIENT === CLIENT_SAFARI && !systemSpeech)
+          throw Object.assign(
+            new Error("This provider host is unavailable in Safari."),
+            {
+              code: "HOST_UNAVAILABLE",
+            }
+          );
         const trustedNative = systemSpeech || localAsr;
         if (
           !trustedNative &&

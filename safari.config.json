@@ -1,0 +1,17 @@
+{
+  "appName": "Kiss Translator",
+  "bundleIdentifier": "com.minaduki.kiss-translator.safari",
+  "version": "2.2.5",
+  "buildNumber": 2020502,
+  "releaseVersion": "2.2.5-safari.2",
+  "upstream": {
+    "tag": "v2.2.5",
+    "commit": "773b90946ef1af454514cc6da9b8fb8ea7054b94",
+    "backports": [
+      "7cacf59b71528af1cb6c0d5c011fed9cfcfaa209",
+      "464ffdcb23b05be3ccae6e162dbbf36bcbb7c1e7",
+      "382b33714637840fd5a7f5b9a07b9fd9a0517ad2"
+    ]
+  },
+  "minimumMacOSVersion": "13.0"
+}

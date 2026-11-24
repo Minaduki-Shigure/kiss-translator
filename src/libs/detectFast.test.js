@@ -3,6 +3,11 @@ import {
   isPureNumberText,
   normalizeZhLang,
 } from "./detectFast";
+import { browser } from "./browser";
+
+jest.mock("./browser", () => ({
+  browser: { i18n: { detectLanguage: jest.fn() } },
+}));
 
 describe("isPureNumberText", () => {
   test("accepts plain numbers of any length", () => {
@@ -46,6 +51,44 @@ describe("normalizeZhLang", () => {
 });
 
 describe("detectLangFast", () => {
+  beforeEach(() => {
+    browser.i18n.detectLanguage = jest.fn();
+  });
+
+  test("does not create a native detection timer when the API is absent", async () => {
+    browser.i18n.detectLanguage = undefined;
+    const schedule = jest.spyOn(globalThis, "setTimeout");
+
+    try {
+      await expect(
+        detectLangFast("ambiguous-unavailable-native-text")
+      ).resolves.toBe("");
+      expect(schedule).not.toHaveBeenCalled();
+    } finally {
+      schedule.mockRestore();
+    }
+  });
+
+  test("uses native detection for ambiguous text and clears its timeout", async () => {
+    browser.i18n.detectLanguage.mockResolvedValue({
+      isReliable: true,
+      languages: [{ language: "pt-BR", percentage: 100 }],
+    });
+    const cancel = jest.spyOn(globalThis, "clearTimeout");
+
+    try {
+      await expect(detectLangFast("ambiguous-native-sample")).resolves.toBe(
+        "pt"
+      );
+      expect(browser.i18n.detectLanguage).toHaveBeenCalledWith(
+        "ambiguous-native-sample"
+      );
+      expect(cancel).toHaveBeenCalledTimes(1);
+    } finally {
+      cancel.mockRestore();
+    }
+  });
+
   test("detects simplified Chinese by charset", async () => {
     expect(
       await detectLangFast("这是一个用于测试划词翻译功能的中文句子。")

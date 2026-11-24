@@ -77,3 +77,28 @@ test("plugin availability uses its selected pair without replacing explicit empt
   ).toMatchObject({ dictUserPrompt: expect.stringContaining("{{text}}") });
   expect(plugin.dictUserPrompt).toBeUndefined();
 });
+
+test("Safari does not resolve an externally implemented saved dictionary or replace it with a cloud service", () => {
+  const previous = process.env.REACT_APP_CLIENT;
+  const saved = {
+    ...api,
+    provider: {
+      apiVersion: 1,
+      implementation: { kind: "script" },
+      capabilities: { dictionary: { handler: "dictionary" } },
+    },
+  };
+  const transApis = [saved, { ...api, apiSlug: "cloud" }];
+  try {
+    process.env.REACT_APP_CLIENT = "chrome";
+    expect(resolve({ transApis })).toMatchObject({ apiSlug: "test" });
+    process.env.REACT_APP_CLIENT = "safari";
+    expect(resolve({ transApis })).toBeNull();
+    expect(resolve({ transApis, aiDictApiSlug: "cloud" })).toMatchObject({
+      apiSlug: "cloud",
+    });
+  } finally {
+    if (previous === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = previous;
+  }
+});

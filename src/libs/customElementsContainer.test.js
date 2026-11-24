@@ -1,7 +1,5 @@
-const fs = require("fs");
-const path = require("path");
-
 const originalClient = process.env.REACT_APP_CLIENT;
+const nativeQueueMicrotask = global.queueMicrotask;
 process.env.REACT_APP_CLIENT = "web";
 afterAll(() => {
   if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
@@ -114,18 +112,36 @@ afterEach(() => {
   createdTranslators.forEach((t) => t.stop());
   createdTranslators.length = 0;
   jest.clearAllMocks();
+  jest.useRealTimers();
   document.body.innerHTML = "";
 });
 
 describe("通用组件化自定义标签容器与还原防泄漏测试（全局默认 autoScan: true，无专属规则）", () => {
-  const fullHtmlPath = path.resolve(__dirname, "../../tmp/bgg_full.html");
-  let sampleHtml = "";
-  if (fs.existsSync(fullHtmlPath)) {
-    sampleHtml = fs.readFileSync(fullHtmlPath, "utf8");
-  }
+  const posts = [
+    "Hey all! Do you think there will be a pdf of the rules?",
+    "The publisher usually shares the rules before release.",
+  ];
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    // 让 MutationObserver 与翻译器自身的 DOM 变更标记共享浏览器的微任务次序。
+    global.queueMicrotask = nativeQueueMicrotask;
+    // 行内自定义组件包裹多个帖子，帖子内部用块级节点分隔作者、菜单与正文。
+    document.body.innerHTML = `
+      <gg-thread>
+        <gg-post>
+          <div>Forum author</div>
+          <div><button>User actions menu</button></div>
+          <div><gg-markup-content>${posts[0]}</gg-markup-content></div>
+        </gg-post>
+        <gg-post>
+          <div><gg-markup-content>${posts[1]}</gg-markup-content></div>
+        </gg-post>
+      </gg-thread>
+    `;
+  });
 
   test("1. 目标选取验证: 即使自定义组件默认 display 为 inline，包含块级子节点时不吞噬外层结构容器", () => {
-    document.documentElement.innerHTML = sampleHtml;
     // 使用纯全局默认规则
     const translator = createTranslator({ transOpen: "false" });
     const targets = translator.previewRule().targets;
@@ -139,13 +155,10 @@ describe("通用组件化自定义标签容器与还原防泄漏测试（全局�
     expect(contentTargets.length).toBe(1);
     expect(contentTargets[0].tagName.toLowerCase()).toBe("gg-markup-content");
     expect(contentTargets[0].textContent).not.toContain("User actions menu");
-    expect(contentTargets[0].textContent).not.toContain("peterc1985");
+    expect(contentTargets[0].textContent).not.toContain("Forum author");
   });
 
   test("2. 还原防泄漏验证: 关闭翻译或还原时，正文中绝无残留 loading 图标", async () => {
-    jest.useFakeTimers();
-    document.documentElement.innerHTML = sampleHtml;
-
     // 模拟在途请求（保持 loading 状态）
     apiTranslate.mockImplementation(() => new Promise(() => {}));
 
@@ -153,7 +166,9 @@ describe("通用组件化自定义标签容器与还原防泄漏测试（全局�
     await flushAsync();
 
     const markupContent = document.querySelector("gg-markup-content");
-    expect(markupContent).toBeDefined();
+    expect(
+      markupContent.querySelector(`.${Translator.KISS_CLASS.warpper} svg`)
+    ).not.toBeNull();
 
     // 触发还原
     translator.stop();
@@ -166,37 +181,36 @@ describe("通用组件化自定义标签容器与还原防泄漏测试（全局�
     expect(wrappers.length).toBe(0);
     const residualSvgTags = markupContent.querySelectorAll("svg");
     expect(residualSvgTags.length).toBe(0);
-    expect(markupContent.textContent).toContain("Hey all!");
+    expect(markupContent.textContent).toBe(posts[0]);
   });
 
-  test("3. 双语对照模式与仅译文模式验证: 全文不产生多余大块译文堆积", async () => {
-    jest.useFakeTimers();
-    document.documentElement.innerHTML = sampleHtml;
+  test.each(["false", "true"])(
+    "逐帖翻译并在各自的正文中显示结果 (transOnly: %s)",
+    async (transOnly) => {
+      apiTranslate.mockResolvedValue({ trText: "测试译文", isSame: false });
+      createTranslator({ transOnly });
+      await flushAsync();
+      await flushAsync();
 
-    apiTranslate.mockImplementation(({ text }) =>
-      Promise.resolve({ targetText: "【译】" + text })
-    );
+      const requests = apiTranslate.mock.calls.map(([request]) => request.text);
+      const postRequests = requests.filter((text) =>
+        posts.some((post) => text.includes(post))
+      );
+      expect(postRequests).toHaveLength(posts.length);
+      expect(postRequests).toEqual(expect.arrayContaining(posts));
 
-    const translator = createTranslator({ transOnly: "false" });
-    await flushAsync();
-
-    // 检查发起的翻译请求
-    const calls = apiTranslate.mock.calls.map((c) => c[0]?.text || "");
-    // 断言发起的请求中绝对没有包含全贴所有楼层合并的大文本（全贴长达 2000+ 字符）
-    const giantMergedCalls = calls.filter(
-      (text) =>
-        text.includes("peterc1985") &&
-        text.includes("Hey all!") &&
-        text.includes("User actions menu")
-    );
-    expect(giantMergedCalls.length).toBe(0);
-
-    // 验证正文已被识别并翻译
-    const contentCalls = calls.filter(
-      (text) =>
-        text.includes("Do you think there will be a pdf") ||
-        text.includes("Hey all!")
-    );
-    expect(contentCalls.length).toBeGreaterThan(0);
-  });
+      const contents = document.querySelectorAll("gg-markup-content");
+      expect(contents).toHaveLength(posts.length);
+      contents.forEach((content, index) => {
+        const translations = content.querySelectorAll(
+          `.${Translator.KISS_CLASS.inner}`
+        );
+        expect(translations).toHaveLength(1);
+        expect(translations[0].textContent).toBe("测试译文");
+        expect(content.textContent.includes(posts[index])).toBe(
+          transOnly === "false"
+        );
+      });
+    }
+  );
 });

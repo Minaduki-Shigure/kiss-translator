@@ -11,6 +11,7 @@ import {
 } from "../providers/capabilities";
 import { getBuiltinServiceDefinition } from "../builtin-plugins/definitions";
 import { resolveBuiltinCapabilities } from "../builtin-plugins/capabilities";
+import { isApiTypeSupported } from "./platformApiSupport";
 import localModelTasks from "./localModelTasks.json";
 import { validateServiceConfig } from "../providers/instances";
 
@@ -87,6 +88,7 @@ export const isApiAvailableFor = (
   capability = "translate",
   context = {}
 ) => {
+  if (!isApiTypeSupported(api)) return false;
   const projected = projectApiCapabilities(api);
   if (!supportsProviderCapability(projected, capability, context.requirements))
     return false;

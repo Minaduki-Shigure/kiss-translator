@@ -55,6 +55,12 @@ try {
 
     process.env.BUILD_PATH = `./${targetDir}`;
     process.env.REACT_APP_CLIENT = clientEnv;
+    if (target === "safari") {
+      const { releaseVersion } = await fs.readJson("safari.config.json");
+      if (!releaseVersion || typeof releaseVersion !== "string")
+        throw new Error("Missing Safari releaseVersion in safari.config.json");
+      process.env.REACT_APP_SAFARI_RELEASE_VERSION = releaseVersion;
+    }
     process.env.REACT_APP_WEB_APP = target === "homepage" ? "homepage" : "";
     process.env.REACT_APP_FILE_BRIDGE_DEV =
       target === "edge-dev" ? "true" : "false";
@@ -86,8 +92,22 @@ try {
     await fs.remove(inDest("manifest.thunderbird.json"));
 
     if (target === "safari") {
+      // GitHub Pages marker is not an extension resource; Xcode omits dotfiles.
+      await fs.remove(inDest(".nojekyll"));
       const manifestPath = inDest("manifest.json");
       const manifest = await fs.readJson(manifestPath);
+      // Safari uses Web Speech for reading aloud and keeps larger rule/word
+      // collections in storage.local. It does not implement chrome.tts.
+      manifest.permissions = manifest.permissions.filter(
+        (permission) => permission !== "tts" && permission !== "offscreen"
+      );
+      if (!manifest.permissions.includes("unlimitedStorage")) {
+        manifest.permissions.push("unlimitedStorage");
+      }
+      manifest.homepage_url =
+        "https://github.com/Minaduki-Shigure/kiss-translator";
+      // Safari chooses how to present the options page; open_in_tab is ignored.
+      delete manifest.options_ui.open_in_tab;
       manifest.optional_permissions = (
         manifest.optional_permissions || []
       ).filter((permission) => permission !== "clipboardRead");

@@ -337,6 +337,71 @@ describe("selection context cache and batch isolation", () => {
   );
 });
 
+describe("Safari local-only provider handling", () => {
+  const originalClient = process.env.REACT_APP_CLIENT;
+
+  beforeEach(() => {
+    process.env.REACT_APP_CLIENT = "safari";
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalClient === undefined) delete process.env.REACT_APP_CLIENT;
+    else process.env.REACT_APP_CLIENT = originalClient;
+  });
+
+  test.each([
+    [
+      "text",
+      (apiSetting) =>
+        apiTranslate({
+          text: "private source text",
+          toLang: "zh-CN",
+          apiSetting,
+        }),
+    ],
+    [
+      "subtitle",
+      (apiSetting) =>
+        apiSubtitle({
+          events: [{ start: 0, end: 1000, text: "private source text" }],
+          toLang: "zh-CN",
+          apiSetting,
+        }),
+    ],
+    [
+      "video summary",
+      (apiSetting) =>
+        apiSummarizeVideo({ transcript: "private source text", apiSetting }),
+    ],
+    [
+      "summary",
+      (apiSetting) =>
+        apiSummarizeContext({
+          transcript: "private source text",
+          apiSetting,
+        }),
+    ],
+  ])(
+    "rejects an imported BuiltinAI %s request without cache or network work",
+    async (_kind, translate) => {
+      for (const type of [OPT_TRANS_BUILTINAI, "LocalAI", "Plugin"]) {
+        const apiSetting = { ...getBuiltinAiApiSetting(30), apiType: type };
+        await expect(translate(apiSetting)).rejects.toThrow(
+          `${type} is unavailable in Safari. Choose another translation service.`
+        );
+        expect(getHttpCachePolyfill).not.toHaveBeenCalled();
+        expect(fetchData).not.toHaveBeenCalled();
+        expect(fnPolyfill).not.toHaveBeenCalled();
+        expect(handleTranslate).not.toHaveBeenCalled();
+        expect(handleSubtitle).not.toHaveBeenCalled();
+        expect(getBatchQueue).not.toHaveBeenCalled();
+        expect(apiSetting.apiType).toBe(type);
+      }
+    }
+  );
+});
+
 describe("apiSubtitle cache identity", () => {
   const events = [{ start: 100, end: 900, text: "hello" }];
 
